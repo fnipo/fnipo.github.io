@@ -66,6 +66,8 @@ TODO: trim posts to 5 minutes max
     - "Design service boundaries in such a way most of its business transactions stay within the boundaries" Udi
     - "When designing boundaries, even for experienced people, there is a server that you are bumping around in the dark trying to guess what the shape of the world is like" Udi
     - "any model serving all purposes that gets passed everywhere is asking for a mess" Ruben
+    - "Keep what changes together, together" Nipo
+    "Data models are perharps the most important part of developing software, because they have such a profound effect: not only on how the software is written, but also on how we think about the problem that we are solving" Martin
 
 # Cosmos DB session consistency mode
     - Failover data loss scenario
