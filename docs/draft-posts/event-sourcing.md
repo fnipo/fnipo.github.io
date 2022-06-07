@@ -1,1 +1,0 @@
-An event sourced data model looks like a table of transaction on that entity
