@@ -1,5 +1,4 @@
 ---
-layout: custom-post
 title:  "Consistency with microservices"
 date:   2022-06-07 00:00:00 +0000
 categories: distributed-systems
@@ -106,7 +105,7 @@ For instance I happened to work on the redesign of a system fully based on [Chan
 
 However there are still some challenges with this model, as described below.
 
-**Idempotency**
+##### Idempotency
 
 One of the challenges is that it may produce the same message N times, and is not responsible for supressing duplicated side effects anymore.
 
@@ -116,9 +115,9 @@ This model requires that messages are designed to be uniquely identified, e.g. b
 
 This is easy though, because services should be idempotent anyway to be resilient to situations that may cause messages to be consumed >1 times even though it was produced only once, such as when processing in batches or consumer offset skews.
 
-**Race conditions**
+##### Race conditions
 
-> What happens if is fails at step 5, and it takes some time and many retries to succeed?
+> What if it fails at step 5, and it takes some time and many retries to succeed?
 
 During this time window downstream services may have already processed the OrderCreated message faster than the database writing suceeds, maybe one of these services attempted to make HTTP requests back to your service to ask more information about the Order and it failed because the Order didn't exist yet.
 
@@ -128,7 +127,7 @@ Services must be designed with resilience in mind, assuming anything may be unav
 
 As far as things are eventually consistent it is fine to mitigate these with resilience guards, the same way you would validate if inputs are null before executing a function.
 
-**Rollbacks**
+##### Rollbacks
 
 The main challenge are rollbacks.
 

@@ -28,7 +28,8 @@ twitter_username: felipenipo
 github_username:  fnipo
 
 # Build settings
-theme: minima
+#theme: minima
+theme: minimal-mistakes-jekyll
 plugins:
   - jekyll-feed
   - jekyll-spaceship
@@ -54,3 +55,77 @@ safe: true
 #   - vendor/cache/
 #   - vendor/gems/
 #   - vendor/ruby/
+
+
+
+# --- Minimal-mistakes config ---
+minimal_mistakes_skin: "default"
+
+locale: "en"
+
+#logo: "/assets/images/88x88.png"
+masthead_title: "Felipe Nipo"
+# site.description: ""  # for SEO
+# url: "https://mademistakes.com"
+
+defaults:
+  # _pages
+  - scope:
+      path: ""
+      type: pages
+    values:
+      author_profile: true
+
+  # _posts
+  - scope:
+      path: ""
+      type: posts
+    values:
+      layout: single
+      author_profile: true
+      share: true
+      show_date: true
+      read_time: true
+
+atom_feed:
+  hide: true
+
+search: true
+
+lunr:
+  search_within_pages: true
+
+og_image: /assets/bio-photo.jpg
+
+social:
+  links:
+    - "https://twitter.com/felipenipo"
+    - "https://www.linkedin.com/in/felipenipo/"
+
+author:
+  name: "Felipe Nipo"
+  avatar: "/assets/bio-photo.jpg"
+  bio: "Software Engineer" # Note: Markdown is allowed
+  location: "Dublin, Ireland"
+  links:
+    - label: "Twitter"
+      icon: "fab fa-fw fa-twitter-square"
+      url: "https://twitter.com/felipenipo"
+    - label: "LinkedIn"
+      icon: "fab fa-fw fa-linkedin"
+      url: "https://www.linkedin.com/in/felipenipo/"
+    - label: "GitHub"
+      icon: "fab fa-fw fa-github"
+      url: "https://github.com/fnipo"
+
+# footer:
+#   links:
+#     - label: "Twitter"
+#       icon: "fab fa-fw fa-twitter-square"
+#       url: "https://twitter.com/felipenipo"
+#     - label: "GitHub"
+#       icon: "fab fa-fw fa-github"
+#       url: "https://github.com/fnipo"
+#     - label: "LinkedIn"
+#       icon: "fab fa-fw fa-linkedin"
+#       url: "https://www.linkedin.com/in/felipenipo/"
