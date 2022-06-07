@@ -44,12 +44,12 @@ CDC allows for a low-latency pull-based access to the database log of transactio
 One could make a separated service that listen to and reacts when an new Order is inserted on the Order table, and uses the new record to produces the OrderCreated message asynchronously.
 This still provides an atomicity guarantee that the message is always produced (eventually) and always after the database writting.
 
-@startmermaid
+```mermaid!
 flowchart LR
     A(Order service) --> |Create Order '123'| B[(Order table)]
     B --> |Change captured| C(Message producer)
     C --> |OrderCreated| D[/Messaging platform/]
-@endmermaid
+```
 
 This is an idea I had and discussed with my team when refactoring a project, and while it is on the right track I realized this would be a bad idea.
 
@@ -71,13 +71,13 @@ It also gives the control back to the workflow on populating the message and its
 
 With an outbox a workflow can either do both data and message writting atomically in a database transaction, or if not using a transaction be able to query the database to check if the message was populated and retry if needed.
 
-@startmermaid
+```mermaid!
 flowchart LR
     A(Order service) --> |Create Order '123'| B[(Order table)]
     A(Order service) --> |Create OrderCreated| C[(OrderCreated outbox table)]
     C --> |Change captured| D(Message producer)
     D --> |OrderCreated| E[/Messaging platform/]
-@endmermaid
+```
 
 The outbox pattern guarantees the message is eventually produced to the messaging platform.
 Moreover, it increases the workflow availability by depending only on the database availability.
@@ -114,7 +114,7 @@ Services consuming this contract have to join information from multiple messages
 
 Correlating messages gets tricky when messages either don't arrive or are processed out of order.
 
-@startmermaid
+```mermaid!
 sequenceDiagram
     autonumber
 
@@ -132,13 +132,13 @@ sequenceDiagram
     Shipping service ->> Shipping service: ???
     Order service ->> Shipping service: The Order '123' was updated and it now requires 2 units of the smart-watch
     Note over Order service,Shipping service: Delayed message
-@endmermaid
+```
 
 This approach leaves a lot of room for bad assumptions under race conditions.
 
 If only the Reservation service could provide a full picture of the reservation status for that order.
 
-@startmermaid
+```mermaid!
 sequenceDiagram
     autonumber
 
@@ -149,7 +149,7 @@ sequenceDiagram
     Shipping service ->> Shipping service: Oh Order '123' required 1 item, but reservation is telling me it didn't finished its job, <br/> this is not ready to ship
     Reservation service ->> Shipping service: I reserved another 1 unit of the smart-watch, the order requires 2 units and is now fully reserved
     Shipping service ->> Shipping service: Starting shipping flow...
-@endmermaid
+```
 
 Contracts should strive for intuitive consistency, and messages design with event-carried state provide not just information about the event itself but also a summary of the current state of an aggregate, so consumers don't have to infer the state of the aggregate.
 

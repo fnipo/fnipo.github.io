@@ -52,14 +52,14 @@ The steps of this workflow are:
 5. At the end it sends a request to an Email platform to update the customer that the ReportRequest was created
 6. Returns an HTTP 201 code
 
-@startmermaid
+```mermaid!
 flowchart TB
     A(Generate Report HTTP request) --> |ID: '123'| B{Does ReportRequest '123' exist?}
     B --> |Yes| C("Return HTTP 409 \n #40;End#41;")
     B --> |No| D[(Create ReportRequest record \n on database)]
     D --> E>Send HTTP request to Email Platform]
     E --> F("Return HTTP 201 \n #40;End#41;")
-@endmermaid
+```
 
 What if the Email platform is down at step 5?
 The workflow created the ReportRequest record on the database, and now any attempt to retry the request will execute up to step 3
@@ -89,17 +89,12 @@ The steps of this workflow are:
 6. Returns an HTTP 201 code
 
 ```mermaid!
-graph TB
+flowchart TB
     A(Order Create HTTP request) --> |ID: '123'| B{Does Order '123' exist?}
     B --> |Yes| C("Return HTTP 409 \n #40;End#41;")
     B --> |No| D[/Produce OrderCreated message/]
     D --> E[(Create Order record \n on database)]
     E --> F("Return HTTP 201 \n #40;End#41;")
-```
-
-```mermaid!
-graph TB
-A[Something] -->|begets| B[Something]
 ```
 
 If the message is produced before the database writing, in a partial execution scenario the workflow will be retried until the database writing succeeds and the message is guaranteed to be sent.
