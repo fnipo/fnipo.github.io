@@ -102,7 +102,7 @@ The same data model concerns pointed in [Change Data Capture (CDC)](#change-data
 and it should leverage stream-table join operations to enrich the final message when needed.
 
 The act of publishing a stream of internal events to the data that live outside layer is also called *Projection*.
-I lastly used [Propulsion][propulsion] on .NET, that does the plumbing work of sourcing, handling CDC, and sinking, from/to many storages such as Cosmos DB, Dynamo DB, Event-store and Kafka.
+I lastly used [Propulsion][propulsion] on .NET to implement projectors, it does the plumbing work of sourcing, handling CDC, and sinking, from/to many storages such as Cosmos DB, Dynamo DB, Event-store and Kafka.
 
 # Event-carried state
 
