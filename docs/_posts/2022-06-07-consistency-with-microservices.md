@@ -1,7 +1,7 @@
 ---
 layout: custom-post
 title:  "Consistency with microservices"
-date:   2022-05-22 18:52:58 +0100
+date:   2022-06-07 00:00:00 +0100
 categories: distributed-systems
 tags: distributed-systems
 ---
