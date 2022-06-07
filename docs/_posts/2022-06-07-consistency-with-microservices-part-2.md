@@ -45,8 +45,8 @@ This still provides an atomicity guarantee that the message is always produced (
 
 ```mermaid!
 flowchart LR
-    A(Order service) --> |Create Order '123'| B[(Order table)]
-    B --> |Change captured| C(Message producer)
+    A(Order service) --> |Insert Order| B[(Order table)]
+    B --> |CDC| C(Message producer)
     C --> |OrderCreated| D[/Messaging platform/]
 ```
 
@@ -71,9 +71,9 @@ It also gives the control back to the workflow on populating the message and its
 With an outbox a workflow can either do both data and message writting atomically in a database transaction, or if not using a transaction be able to query the database to check if the message was populated and retry if needed.
 
 ```mermaid!
-flowchart LR
-    A(Order service) --> |Create Order '123'| B[(Order table)]
-    A(Order service) --> |Create OrderCreated| C[(OrderCreated outbox table)]
+flowchart TD
+    A(Order service) --> |Insert Order| B[(Order table)]
+    A(Order service) --> |Insert OrderCreated| C[(OrderCreated outbox table)]
     C --> |Change captured| D(Message producer)
     D --> |OrderCreated| E[/Messaging platform/]
 ```
@@ -121,16 +121,16 @@ sequenceDiagram
     participant Reservation service
     participant Shipping service
 
-    Order service ->> Reservation service: I created Order '123', it requires 1 unit of an smart-watch
-    Order service ->> Shipping service: I created Order '123', it requires 1 unit of an smart-watch
-    Order service ->> Reservation service: The Order '123' was updated and it now requires 2 units of the smart-watch
-    Reservation service ->> Shipping service: I reserved 1 unit of the smart-watch
-    Shipping service ->> Shipping service: Oh Order '123' required 1 item and it is now reserved, we are ready to start shipping
-    Shipping service ->> Shipping service: Starting shipping flow...
-    Reservation service ->> Shipping service: I reserved another 1 unit of the smart-watch
-    Shipping service ->> Shipping service: ???
-    Order service ->> Shipping service: The Order '123' was updated and it now requires 2 units of the smart-watch
-    Note over Order service,Shipping service: Delayed message
+    Order service ->> Reservation service: "I created Order '123', <br/>it requires 1x smart-watch"
+    Order service ->> Shipping service: "I created Order '123', <br/>it requires 1x smart-watch"
+    Order service ->> Reservation service: "The Order '123' was updated, <br/>it now requires 2x smart-watches"
+    Reservation service ->> Shipping service: "I reserved 1x smart-watch"
+    Shipping service ->> Shipping service: "Oh Order '123' required 1x item, <br/>it is now reserved, <br/>we are ready to start shipping"
+    Shipping service ->> Shipping service: "Starting shipping flow..."
+    Reservation service ->> Shipping service: "I reserved another 1x smart-watch"
+    Shipping service ->> Shipping service: "???"
+    Order service ->> Shipping service: "The Order '123' was updated, <br/>it now requires 2x smart-watches"
+    Note over Order service,Shipping service: <delayed message>
 ```
 
 This approach leaves a lot of room for bad assumptions under race conditions.
@@ -144,10 +144,10 @@ sequenceDiagram
     participant Reservation service
     participant Shipping service
 
-    Reservation service ->> Shipping service: I reserved 1 unit of the smart-watch, <br/> the order requires 2 units so there is another reservation in progress
-    Shipping service ->> Shipping service: Oh Order '123' required 1 item, but reservation is telling me it didn't finished its job, <br/> this is not ready to ship
-    Reservation service ->> Shipping service: I reserved another 1 unit of the smart-watch, the order requires 2 units and is now fully reserved
-    Shipping service ->> Shipping service: Starting shipping flow...
+    Reservation service ->> Shipping service: "I reserved 1x smart-watch, <br/>the order requires 2x smart-watches, <br/>there is another reservation ongoing"
+    Shipping service ->> Shipping service: "Oh Order '123' required 1x item, <br/>but reservation is telling me it didn't finished its job, <br/>it must be a race condition this is not ready to ship"
+    Reservation service ->> Shipping service: "I reserved another 1x smart-watch, <br/>the order requires 2x units, <br/>it is now fully reserved"
+    Shipping service ->> Shipping service: "Starting shipping flow..."
 ```
 
 Contracts should strive for intuitive consistency, and messages design with event-carried state provide not just information about the event itself but also a summary of the current state of an aggregate, so consumers don't have to infer the state of the aggregate.
