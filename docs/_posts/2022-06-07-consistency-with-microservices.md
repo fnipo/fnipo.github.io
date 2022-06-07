@@ -97,6 +97,11 @@ graph TB
     E --> F("Return HTTP 201 \n #40;End#41;")
 @endmermaid
 
+```mermaid!
+graph TD
+A[Something] -->|begets| B[Something]
+```
+
 If the message is produced before the database writing, in a partial execution scenario the workflow will be retried until the database writing succeeds and the message is guaranteed to be sent.
 
 This is an at-least-once guarantee, it is a stronger guarantee that ensures the message is always delivered, up to N times as the workflow is retried N times until it fully executes.
