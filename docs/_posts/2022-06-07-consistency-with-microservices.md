@@ -1,7 +1,7 @@
 ---
 layout: custom-post
 title:  "Consistency with microservices"
-date:   2022-06-07 00:00:00 +0100
+date:   2022-06-07 00:00:00 +0000
 categories: distributed-systems
 tags: distributed-systems
 ---
@@ -89,7 +89,7 @@ The steps of this workflow are:
 6. Returns an HTTP 201 code
 
 @startmermaid
-flowchart TB
+graph TB
     A(Order Create HTTP request) --> |ID: '123'| B{Does Order '123' exist?}
     B --> |Yes| C("Return HTTP 409 \n #40;End#41;")
     B --> |No| D[/Produce OrderCreated message/]
