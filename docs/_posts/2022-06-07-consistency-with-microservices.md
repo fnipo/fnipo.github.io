@@ -88,17 +88,17 @@ The steps of this workflow are:
 5. At the end it creates the Order record on the database
 6. Returns an HTTP 201 code
 
-@startmermaid
+```mermaid!
 graph TB
     A(Order Create HTTP request) --> |ID: '123'| B{Does Order '123' exist?}
     B --> |Yes| C("Return HTTP 409 \n #40;End#41;")
     B --> |No| D[/Produce OrderCreated message/]
     D --> E[(Create Order record \n on database)]
     E --> F("Return HTTP 201 \n #40;End#41;")
-@endmermaid
+```
 
 ```mermaid!
-graph TD
+graph TB
 A[Something] -->|begets| B[Something]
 ```
 
