@@ -163,5 +163,5 @@ Follow the part 2 of this series on [Consistency with microservices (Part 2)][ar
 [cassandra-cdc]: https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html
 [transaction-log-tailling]: https://microservices.io/patterns/data/transaction-log-tailing.html
 [martin-fowler-twitter]: https://twitter.com/martinfowler
-[article-part-2]: 2022-06-07-consistency-with-microservices-part-2.html
-[article-part-2-cdc]: 2022-06-07-consistency-with-microservices-part-2.html#change-data-capture-cdc
+[article-part-2]: consistency-with-microservices-part-2.html
+[article-part-2-cdc]: consistency-with-microservices-part-2.html#change-data-capture-cdc

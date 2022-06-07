@@ -163,5 +163,5 @@ Finally, adding this summary to messages prevents downstream services to have to
 [cassandra-cdc]: https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html
 [transaction-log-tailling]: https://microservices.io/patterns/data/transaction-log-tailing.html
 [martin-fowler-twitter]: https://twitter.com/martinfowler
-[article-part-1]: 2022-06-07-consistency-with-microservices.html
-[article-part-1-rollback]: 2022-06-07-consistency-with-microservices.html#at-least-once-delivery
+[article-part-1]: consistency-with-microservices.html
+[article-part-1-rollback]: consistency-with-microservices.html#at-least-once-delivery
