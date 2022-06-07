@@ -101,6 +101,9 @@ With an event providing context to the message producer, what is outsourced to t
 The same data model concerns pointed in [Change Data Capture (CDC)](#change-data-capture-cdc) also applies here though, it is still important to not fall into the trap of leaking the message model to the event model,
 and it should leverage stream-table join operations to enrich the final message when needed.
 
+The act of publishing a stream of internal events to the data that live outside layer is also called *Projection*.
+I lastly used [Propulsion][propulsion] on .NET, that does the plumbing work of sourcing, handling CDC, and sinking, from/to many storages such as Cosmos DB, Dynamo DB, Event-store and Kafka.
+
 # Event-carried state
 
 There are other sources of inconsistency that are completely isolated on the data that lives outside layer.
@@ -164,3 +167,4 @@ Finally, adding this summary to messages prevents downstream services to have to
 [martin-fowler-twitter]: https://twitter.com/martinfowler
 [article-part-1]: consistency-with-microservices.html
 [article-part-1-rollback]: consistency-with-microservices.html#at-least-once-delivery
+[propulsion]: https://github.com/jet/propulsion
