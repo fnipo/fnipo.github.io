@@ -114,9 +114,9 @@ It happens when services are weakly integrated and their contracts don't communi
 
 When messages are designed as deltas, they individually don't provide enough information to communicate the whole picture of the ongoing operation.
 
-Services consuming this contract have to join information from multiple messages and make assumptions to reach enough information to make a decision.
+Services consuming this contract have to correlate information from multiple messages and make assumptions to reach enough information to make a decision.
 
-Correlating messages gets tricky when messages either don't arrive or are processed out of order.
+Correlating messages gets tricky when messages either don't arrive or are processed out of order, as depicted below.
 
 {:style="text-align:center;"}
 ```mermaid!
@@ -139,9 +139,9 @@ sequenceDiagram
     Note over Order service,Shipping service: <delayed message>
 ```
 
-This approach leaves a lot of room for bad assumptions under race conditions.
+This approach leaves a lot of room for bad assumptions, specially under race conditions.
 
-If only the Reservation service could provide a full picture of the reservation status for that order.
+> If only the Reservation service could provide a full picture of the reservation status for that order...
 
 {:style="text-align:center;"}
 ```mermaid!
