@@ -10,24 +10,23 @@ The least they share the more decoupled, autonomous, and available they are.
 
 [Integration through the database][martin-fowler-integration-database] is replaced by integration through an unreliable communication medium, typically an API or messaging platform.
 
-This data isolation creates 2 layers of data in a system, as [Pat Helland's paper][pat-helland-paper] describes:
+This creates 2 layers of data in a system, as [Pat Helland's paper][pat-helland-paper] describes:
 - **Data that lives inside**: it's your classic data stored in a SQL database, it's private and mutable
 - **Data that lives outside**: refers to data that flows between services, e.g. messages and API requests. It's public, immutable, and uniquely identified
 
-This creates a strong boundary between services, which translates into high autonomy.
+As services don't have access to each other's layer of data that lives inside, they benefit from a strong boundary between them which translates into high autonomy.
 
-A service can do whatever it wants with the data that lives inside and rest assured it will never impact the outside world, as far as it can respect its API and message contracts.
+Services can do whatever it wants with the data that lives inside and rest assured it will never impact the outside world, as far as it can respect its API and message contracts.
 The team that owns a service can tackle tech debt at their own pace, migrate to different technologies, or completely rewrite the service, with minimal coordination and friction with the rest of the organization.
 
-High autonomy lends itself to high availability, particularly if services communicate asynchronously by messaging helping services to untie their availability from each other, so when a service's API goes down it doesn't cause a ripple effect blocking all dependant services.
+High autonomy lends itself to high availability, particularly if services communicate asynchronously by messaging and untying availabilities, so when a service's API goes down it doesn't cause a ripple effect blocking all dependant services.
 
-As the physics of the [CAP theorem][cap-theorem] states, when availability is increased, consistency is lost.
-Now we have 2 data layers, one that lives inside, and another that lives outside, which have different models, are updated at different times and are not always consistent with each other.
+Although the decentralization of distributed systems brings many advantages, it doesn't come for free, it adds considerable complexity to systems, and particularly making it fault-tolerant is a lot of work, as a developer there will be days full of suspicion and paranoia thinking deeply about all the things that can go wrong.
 
-The decentralization of distributed systems brings many advantages, but it adds considerable complexity to systems.
-Particularly making it fault-tolerant is a lot of work, as a developer there will be days full of suspicion and paranoia thinking deeply about all the things that can go wrong.
+As the physics of the [CAP theorem][cap-theorem] states, where availability is increased, consistency is lost, being one of the main concerns with this setting.
+These two independent data layers have different purposes and models, are not updated at the same time, and hence are not always consistent with each other.
 
-Let's explore the sources of inconsistencies with this setting:
+This post covers possible sources of inconsistencies with microservices.
 
 # Partial executions
 
@@ -51,6 +50,7 @@ The steps of this workflow are:
 5. In the end, it sends a request to an Email platform to update the customer that the ReportRequest was created
 6. Returns an HTTP 201 code
 
+{:style="text-align:center;"}
 ```mermaid!
 flowchart TB
     A(Generate Report HTTP request) --> |ID: '123'| B{Does ReportRequest '123' exist?}
@@ -58,7 +58,7 @@ flowchart TB
     B --> |No| D[(Create ReportRequest record \n on database)]
     D --> E>Send HTTP request to Email Platform]
     E --> F("Return HTTP 201 \n #40;End#41;")
-```{: .align-center}
+```
 
 What if the Email platform is down at step 5?
 The workflow created the ReportRequest record on the database, and now any attempt to retry the request will execute up to step 3
@@ -84,9 +84,10 @@ The steps of this workflow are:
 2. The API validates if that OrderId is already created
 3. If yes, it returns an HTTP 409 code to signal the Id provided has already been taken by an existing resource
 4. If not, it produces an OrderCreated message to a topic
-5. In the end it creates the Order record on the database
+5. In the end, it creates the Order record on the database
 6. Returns an HTTP 201 code
 
+{:style="text-align:center;"}
 ```mermaid!
 flowchart TB
     A(Order Create HTTP request) --> |ID: '123'| B{Does Order '123' exist?}
@@ -94,7 +95,7 @@ flowchart TB
     B --> |No| D[/Produce OrderCreated message/]
     D --> E[(Create Order record \n on database)]
     E --> F("Return HTTP 201 \n #40;End#41;")
-```{: .align-center}
+```
 
 If the message is produced before the database writing, in a partial execution scenario the workflow will be retried until the database writing succeeds and the message is guaranteed to be sent.
 
@@ -134,9 +135,9 @@ The main challenge is rollbacking.
 > What if only at step 5 do you discover the Order can't be created?
 
 Possible scenarios:
-* The client gives up on the Order and stops retrying
 * Some of the business invariants are checked at the database level
 * This is a non-deterministic flow such as a reservation. The database writing is competing for resources and the writing fails to avoid overbooking
+* The client just gives up on the Order and stops retrying
 
 But now downstream services are already processing the message, handling payment, and moving inventory, and it rippled out a permanent inconsistency across the system.
 
@@ -144,11 +145,13 @@ Data that lives outside is immutable, a message can't be un-sent and rollback ac
 
 In order to roll back, it needs to span a whole Order Cancellation saga, to notify other services and allow them to take compensatory actions, e.g. refund payment.
 
-Saga implementations are complex, it requires strong coordination and testing between multiple teams, it is usually designed by a high-level architect that understands most of the system.
+[Sagas][saga] are complex to implement, it requires strong coordination and testing between multiple teams, it is usually designed by a high-level architect that understands most of the system.
 
 Cancellation sagas may exist as part of the business rules, but in this example, it exists purely for technical reasons requiring quite extra work.
 
-To avoid rollbacks we need a stronger guarantee when delivering messages, we need the best of both worlds, we need somehow to ensure the message is always produced while also as the lastest step of the flow to avoid bad assumptions.
+To avoid rollbacks this workflow needs a stronger guarantee when delivering messages, it needs the best of both worlds:
+- Guarantee the message is always produced
+- Guarantee the message is produced at the latest step to avoid bad assumptions
 
 # Consistency with microservices (Part 2)
 

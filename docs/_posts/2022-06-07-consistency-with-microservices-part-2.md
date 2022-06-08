@@ -5,9 +5,9 @@ categories: distributed-systems
 tags: distributed-systems
 ---
 
-The first part of this series [Consistency with microservices][article-part-1] uncovered pitfalls with simple message delivering patterns and its associated guarantees.
+The first part of this series [Consistency with microservices][article-part-1] uncovered pitfalls with message delivering patterns and its associated guarantees.
 
-This part will cover more complex approaches that provide stronger guarantees.
+This part will cover more complex strategies that provide stronger guarantees.
 
 # Dual-writes
 
@@ -43,12 +43,13 @@ CDC allows for low-latency pull-based access to the database log of transactions
 One could make a separate service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the OrderCreated message asynchronously.
 This still provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.
 
+{:style="text-align:center;"}
 ```mermaid!
 flowchart LR
     A(Order service) --> |Insert Order| B[(Order table)]
     B --> |CDC| C(Message producer)
     C --> |OrderCreated| D[/Messaging platform/]
-```{: .align-center}
+```
 
 This is an idea I had and discussed with my team when refactoring a project, and while it is on the right track I realized this would be a bad idea.
 
@@ -70,13 +71,14 @@ It also gives the control back to the workflow on populating the message and its
 
 With an outbox, a workflow can either do both data and message writing atomically in a database transaction or if not using a transaction be able to query the database to check if the message was populated and retry if needed.
 
+{:style="text-align:center;"}
 ```mermaid!
 flowchart TD
     A(Order service) --> |Insert Order| B[(Order table)]
     A(Order service) --> |Insert OrderCreated| C[(OrderCreated outbox table)]
     C --> |Change captured| D(Message producer)
     D --> |OrderCreated| E[/Messaging platform/]
-```{: .align-center}
+```
 
 The outbox pattern guarantees the message is eventually produced to the messaging platform.
 Moreover, it increases the workflow availability by depending only on the database availability.
@@ -116,6 +118,7 @@ Services consuming this contract have to join information from multiple messages
 
 Correlating messages gets tricky when messages either don't arrive or are processed out of order.
 
+{:style="text-align:center;"}
 ```mermaid!
 sequenceDiagram
     autonumber
@@ -134,12 +137,13 @@ sequenceDiagram
     Shipping service ->> Shipping service: "???"
     Order service ->> Shipping service: "The Order '123' was updated, <br/>it now requires 2x smart-watches"
     Note over Order service,Shipping service: <delayed message>
-```{: .align-center}
+```
 
 This approach leaves a lot of room for bad assumptions under race conditions.
 
 If only the Reservation service could provide a full picture of the reservation status for that order.
 
+{:style="text-align:center;"}
 ```mermaid!
 sequenceDiagram
     autonumber
@@ -151,7 +155,7 @@ sequenceDiagram
     Shipping service ->> Shipping service: "Oh Order '123' required 1x item, <br/>but reservation is telling me it didn't finished its job, <br/>it must be a race condition this is not ready to ship"
     Reservation service ->> Shipping service: "I reserved another 1x smart-watch, <br/>the order requires 2x units, <br/>it is now fully reserved"
     Shipping service ->> Shipping service: "Starting shipping flow..."
-```{: .align-center}
+```
 
 Contracts should strive for intuitive consistency, and messages designed with an event-carried state provide not just information about the event itself but also a summary of the current state of an aggregate, so consumers don't have to infer the state of the aggregate.
 
