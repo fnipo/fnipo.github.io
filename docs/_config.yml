@@ -106,7 +106,7 @@ social:
 author:
   name: "Felipe Nipo"
   avatar: "/assets/bio-photo.jpg"
-  bio: "Software Engineer" # Note: Markdown is allowed
+  #bio: "" # note: Markdown is allowed
   location: "Dublin, Ireland"
   links:
     - label: "Twitter"
@@ -119,14 +119,8 @@ author:
       icon: "fab fa-fw fa-github"
       url: "https://github.com/fnipo"
 
-# footer:
-#   links:
-#     - label: "Twitter"
-#       icon: "fab fa-fw fa-twitter-square"
-#       url: "https://twitter.com/felipenipo"
-#     - label: "GitHub"
-#       icon: "fab fa-fw fa-github"
-#       url: "https://github.com/fnipo"
-#     - label: "LinkedIn"
-#       icon: "fab fa-fw fa-linkedin"
-#       url: "https://www.linkedin.com/in/felipenipo/"
+analytics:
+  provider: "google-gtag"
+  google:
+    tracking_id: "G-P9LR4DJVN7"
+    anonymize_ip: false # default
