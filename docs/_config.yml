@@ -106,7 +106,7 @@ social:
 author:
   name: "Felipe Nipo"
   avatar: "/assets/bio-photo.jpg"
-  #bio: "" # note: Markdown is allowed
+  bio: "" # note: Markdown is allowed
   location: "Dublin, Ireland"
   links:
     - label: "Twitter"
