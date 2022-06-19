@@ -85,7 +85,7 @@ defaults:
       layout: single
       author_profile: true
       share: true
-      show_date: true
+      show_date: false
       read_time: true
 
 atom_feed:
@@ -106,7 +106,7 @@ social:
 author:
   name: "Felipe Nipo"
   avatar: "/assets/bio-photo.jpg"
-  bio: "" # note: Markdown is allowed
+  bio: "Software Engineer" # note: Markdown is allowed
   location: "Dublin, Ireland"
   links:
     - label: "Twitter"
