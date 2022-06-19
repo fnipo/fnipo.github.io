@@ -97,15 +97,13 @@ Unfortunately, the *Event* term is overloaded and used in both situations, messa
 ![](https://www.youtube.com/watch?v=STKCRSUsyP0&width=400&height=250){: .align-center}
 
 An event is a kind of data that carries context to communicate what has happened to an aggregate.
-And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as discussed in [Change Data Capture (CDC)](#change-data-capture-cdc).
+And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in [Change Data Capture (CDC)](#change-data-capture-cdc).
 With an event providing context to the message producer, what is outsourced to this service is mostly the decision of what events should be published to the outside world and the mechanics of using the messaging platform.
 
-The same data model concerns pointed out in [Change Data Capture (CDC)](#change-data-capture-cdc) also apply here, and it shouldn't fall into the trap of leaking the message model to the event model,
+However, the same data model concerns pointed out in [Change Data Capture (CDC)](#change-data-capture-cdc) also apply here, and it shouldn't fall into the trap of leaking the message model to the event model,
 the publishing service should perform stream-table join operations when needed to enrich the message, gathering related data that is not directly present in the event.
 
-The act of publishing a stream of internal events to the *data that live outside* is also called *Projection*.
-
-In recent work, I used the [Propulsion][propulsion] library on .NET to implement a Projection.
+The act of publishing a stream of internal events to the *data that live outside* is also called *Projection*, and in recent work, I used the [Propulsion][propulsion] library on .NET to implement a Projection.
 Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.
 
 [two-phase-commit]: https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html
