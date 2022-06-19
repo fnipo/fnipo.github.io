@@ -134,7 +134,7 @@ Sagas are costly to implement tough, it requires strong coordination and testing
 
 The strategies above follow the *dual-writes* pattern, which is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.
 
-To ensure the message is delivered while mitigating the costs of rollbacks, a service needs atomicity guarantees that are not provided by this pattern.
+To ensure messages are delivered while mitigating the costs of rollbacks, a service needs atomicity guarantees that are not provided by this pattern.
 Follow the [Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing][dual-writes-article] post to learn more about strategies that provides atomicity.
 
 [article-part-2-cdc]: ../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html#change-data-capture-cdc

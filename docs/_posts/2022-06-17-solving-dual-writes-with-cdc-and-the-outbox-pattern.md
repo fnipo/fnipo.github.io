@@ -33,9 +33,9 @@ CDC is a built-in feature in databases such as [Cassandra][cassandra-cdc] and [C
 
 It allows the implementation of a service that reacts to data changes and do some operation, similar to what traditional Triggers provided but completely extracting logic from the database layer.
 
-Databases provides CDC in one of these two flavors:
-* Pull-based CDC: Essentially a long and continuous query. Changes are handled in batches to counter polling latency, and are ordered by the date and time they happened. It is able to capture inserts and updates, but limited when capturing deletes.
-* Push-based CDC: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.
+Databases provide CDC in one of these two flavors:
+* Pull-based: Essentially a long and continuous query. Changes are handled in batches to counter polling latency and are ordered by the date and time they happened. It can capture inserts and updates but is limited when capturing deletes.
+* Push-based: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.
 
 > How could CDC help to avoid rollbacks on the [at-least-once scenario][article-part-1-rollback]?
 
@@ -68,7 +68,7 @@ The message model is defined on the *OrderCreatedOutbox* table on the database c
 
 A workflow can either do both data and message writing atomically in a database transaction, or if not using transactions at least be able to query the database to check if the message was populated and retry when needed.
 
-Also, the workflows have full control on defining and populating the message.
+Also, the workflows have full control over defining and populating the message.
 
 {:style="text-align:center;"}
 ```mermaid!
