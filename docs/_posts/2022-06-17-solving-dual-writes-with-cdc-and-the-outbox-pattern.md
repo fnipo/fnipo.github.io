@@ -87,7 +87,7 @@ The outbox pattern guarantees the message is eventually produced to the messagin
 
 On an event-sourced database, data is stored as if it were messages, there are no tables, instead, there are streams of events that mimic a queue of messages.
 
-When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by [Pat Helland's paper][pat-helland-paper] explanation on the difference between *data that lives inside* and *data that lives outside*.
+When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by [Pat Helland's paper][pat-helland-paper] with the difference between *data that lives inside* and *data that lives outside*.
 
 Events are part of the *data that lives inside* (but also immutable) and part of the authoritative data source, while messages are part of the *data that lives outside* and are designed for communication across [Bounded Contexts][bounded-contexts].
 
