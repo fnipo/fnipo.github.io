@@ -3,6 +3,8 @@ title:  "Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event
 date:   2022-06-17 00:00:00 +0000
 categories: distributed-systems
 tags: distributed-systems
+header:
+    og_image: /assets/duo.jpg
 ---
 
 The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.

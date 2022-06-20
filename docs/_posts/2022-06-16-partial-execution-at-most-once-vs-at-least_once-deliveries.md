@@ -3,6 +3,8 @@ title:  "Partial execution: At-most-once vs. At-least-once Deliveries"
 date:   2022-06-16 00:00:00 +0000
 categories: distributed-systems
 tags: distributed-systems
+header:
+    og_image: /assets/deliveries.jpg
 ---
 
 A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.
