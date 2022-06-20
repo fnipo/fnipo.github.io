@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="3.9.2">Jekyll</generator><link href="https://fnipo.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://fnipo.github.io/" rel="alternate" type="text/html" /><updated>2022-06-20T16:33:01+00:00</updated><id>https://fnipo.github.io/feed.xml</id><title type="html">Felipe Nipo</title><subtitle>12+ years experience as Software Engineer with a post-graduate degree, experience in backend development with exposure to distributed systems, event sourcing, and event-driven architectures.</subtitle><author><name>Felipe Nipo</name></author><entry><title type="html">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing</title><link href="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" rel="alternate" type="text/html" title="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing" /><published>2022-06-17T00:00:00+00:00</published><updated>2022-06-17T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">&lt;p&gt;The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.&lt;/p&gt;
+
+&lt;p&gt;This is typically used on systems that can’t compromise availability with locking strategies such as &lt;a href=&quot;https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html&quot;&gt;Two Phase Commit&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;As explained in the &lt;a href=&quot;../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html&quot;&gt;Partial execution: At-most-once vs. At-least-once Deliveries&lt;/a&gt; post, this presents consistency challenges in partial execution scenarios, particularly when involving non-queriable storage such as a message bus.
+Managing inconsistencies gets even more challenging as a workflow is extended to write to more storages: databases, messaging platforms, cache, elasticsearch, etc…&lt;/p&gt;
+
+&lt;p&gt;A workflow may require stronger consistency that guarantees atomicity, which means a guarantee that either the two writes succeed or none of them do, so there is never a partial state.&lt;/p&gt;
+
+&lt;p&gt;Another concern with dual-writes is that it reduces the overall availability of a workflow as it is tied to the availability of multiple infrastructure components:&lt;/p&gt;
+
+&lt;p&gt;From &lt;a href=&quot;https://aws.amazon.com/legal/service-level-agreements/&quot;&gt;AWS SLAs&lt;/a&gt;:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;AWS messaging availability is 99.5% (1-day downtime a year)&lt;/li&gt;
+  &lt;li&gt;AWS databases availability is 99.5% (1-day downtime a year)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Following the formula for the compound probability of independent events occurring together:
+$ P (A \text{ and } B) = P(A) * P(B) $&lt;/p&gt;
+
+&lt;p&gt;$ 0.995 * 0.995 = 0.990 $&lt;/p&gt;
+
+&lt;p&gt;The overall workflow availability based on dual-writes is reduced to 99.0%, and downtime is amplified to 3-days a year.&lt;/p&gt;
+
+&lt;h1 id=&quot;change-data-capture-cdc&quot;&gt;Change Data Capture (CDC)&lt;/h1&gt;
+
+&lt;p&gt;CDC is a built-in feature in databases such as &lt;a href=&quot;https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html&quot;&gt;Cassandra&lt;/a&gt; and &lt;a href=&quot;https://docs.microsoft.com/en-us/azure/cosmos-db/sql/change-feed-processor&quot;&gt;Cosmos DB&lt;/a&gt; to allow subscription on data changes, i.e. the Observer pattern, with an at-least-once delivery guarantee.&lt;/p&gt;
+
+&lt;p&gt;It allows the implementation of a service that reacts to data changes and do some operation, similar to what traditional Triggers provided but completely extracting logic from the database layer.&lt;/p&gt;
+
+&lt;p&gt;Databases provide CDC in one of these two flavors:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Pull-based: Essentially a long and continuous query. Changes are handled in batches to counter polling latency and are ordered by the date and time they happened. It can capture inserts and updates but is limited when capturing deletes.&lt;/li&gt;
+  &lt;li&gt;Push-based: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;How could CDC help to avoid rollbacks on the &lt;a href=&quot;../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html#at-least-once-delivery&quot;&gt;at-least-once scenario&lt;/a&gt;?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;One could make a dedicated service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the &lt;em&gt;OrderCreated&lt;/em&gt; message asynchronously.
+This design provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.&lt;/p&gt;
+
+&lt;p style=&quot;text-align:center;&quot;&gt;&lt;img class=&quot;mermaid&quot; src=&quot;https://mermaid.ink/svg/eyJjb2RlIjoiZmxvd2NoYXJ0IExSXG5BKE9yZGVyIHNlcnZpY2UpIC0tPiB8SW5zZXJ0IE9yZGVyfCBCWyhPcmRlciB0YWJsZSldXG5CIC0tPiB8Q0RDfCBDKE1lc3NhZ2UgcHJvZHVjZXIpXG5DIC0tPiB8T3JkZXJDcmVhdGVkfCBEWy9NZXNzYWdpbmcgcGxhdGZvcm0vXSIsIm1lcm1haWQiOm51bGx9&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;This is an idea I explored in a previous work when refactoring a project, and while it is on the right track I realized this would be a bad idea.&lt;/p&gt;
+
+&lt;p&gt;The main problem is that it takes away from the workflow the power of defining the message content, leading to:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Increased complexity because the message definition logic is now hidden on this intermediate service that produces the &lt;em&gt;OrderCreated&lt;/em&gt; message&lt;/li&gt;
+  &lt;li&gt;The job of the &lt;em&gt;OrderCreated&lt;/em&gt; message producer is not easy, it is based on lots of inferences, mainly because it doesn’t have enough context to do its job except for what it reads from the database Order data model&lt;/li&gt;
+  &lt;li&gt;The Order data model may become a mix of data and messaging models to facilitate the job of the &lt;em&gt;OrderCreator&lt;/em&gt; producer. It tries to satisfy both needs but ultimately not fitting any&lt;/li&gt;
+  &lt;li&gt;Strong coupling between the message model and the Order data model&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;the-outbox-pattern&quot;&gt;The Outbox Pattern&lt;/h1&gt;
+
+&lt;p&gt;A simpler approach based on CDC is by implementing an Outbox, to define clear boundaries between the data model and the message model.&lt;/p&gt;
+
+&lt;p&gt;In the Outbox Pattern the database is used as a queue and leverages a &lt;a href=&quot;https://microservices.io/patterns/data/transaction-log-tailing.html&quot;&gt;Transaction Log Tailing&lt;/a&gt; mechanism based on CDC to replicate data from the database queue to a messaging platform.&lt;/p&gt;
+
+&lt;p&gt;The message model is defined on the &lt;em&gt;OrderCreatedOutbox&lt;/em&gt; table on the database completely decoupled from the Order table model.&lt;/p&gt;
+
+&lt;p&gt;A workflow can either do both data and message writing atomically in a database transaction, or if not using transactions at least be able to query the database to check if the message was populated and retry when needed.&lt;/p&gt;
+
+&lt;p&gt;Also, the workflows have full control over defining and populating the message.&lt;/p&gt;
+
+&lt;p style=&quot;text-align:center;&quot;&gt;&lt;img class=&quot;mermaid&quot; src=&quot;https://mermaid.ink/svg/eyJjb2RlIjoiZmxvd2NoYXJ0IFREXG5BKE9yZGVyIHNlcnZpY2UpIC0tPiB8SW5zZXJ0IE9yZGVyfCBCWyhPcmRlciB0YWJsZSldXG5BKE9yZGVyIHNlcnZpY2UpIC0tPiB8SW5zZXJ0IE9yZGVyQ3JlYXRlZHwgQ1soT3JkZXJDcmVhdGVkIG91dGJveCB0YWJsZSldXG5DIC0tPiB8Q2hhbmdlIGNhcHR1cmVkfCBEKE1lc3NhZ2UgcHJvZHVjZXIpXG5EIC0tPiB8T3JkZXJDcmVhdGVkfCBFWy9NZXNzYWdpbmcgcGxhdGZvcm0vXSIsIm1lcm1haWQiOm51bGx9&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;The outbox pattern guarantees the message is eventually produced to the messaging platform, and it increases the workflow availability by depending only on the database availability.&lt;/p&gt;
+
+&lt;h1 id=&quot;event-sourcing&quot;&gt;Event Sourcing&lt;/h1&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;“Eventsourcing uses storage as a way of communication, it solves storage and messaging for you” &lt;br /&gt;Vaugh Vernon, on &lt;a href=&quot;https://www.goodreads.com/en/book/show/28602719-domain-driven-design-distilled&quot;&gt;Domain-Driven Design Distilled&lt;/a&gt; book&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;On an event-sourced database, data is stored as if it were messages, there are no tables, instead, there are streams of events that mimic a queue of messages.&lt;/p&gt;
+
+&lt;p&gt;When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by &lt;a href=&quot;https://queue.acm.org/detail.cfm?id=3415014&quot;&gt;Pat Helland’s paper&lt;/a&gt; with the difference between &lt;em&gt;data that lives inside&lt;/em&gt; and &lt;em&gt;data that lives outside&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Events are part of the &lt;em&gt;data that lives inside&lt;/em&gt; (but also immutable) and part of the authoritative data source, while messages are part of the &lt;em&gt;data that lives outside&lt;/em&gt; and are designed for communication across &lt;a href=&quot;https://martinfowler.com/bliki/BoundedContext.html&quot;&gt;Bounded Contexts&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately, the &lt;em&gt;Event&lt;/em&gt; term is overloaded and used in both situations, messages are even called &lt;em&gt;integration events&lt;/em&gt; in the DDD world,
+&lt;a href=&quot;https://twitter.com/martinfowler&quot;&gt;Martin Fowler&lt;/a&gt; has a nice presentation on the many meanings of the &lt;em&gt;Event&lt;/em&gt; term:&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;https://www.youtube.com/watch?v=STKCRSUsyP0&amp;amp;width=400&amp;amp;height=250&quot; alt=&quot;&quot; class=&quot;align-center&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;An event is a kind of data that carries context to communicate what has happened to an aggregate.
+And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in &lt;a href=&quot;#change-data-capture-cdc&quot;&gt;Change Data Capture (CDC)&lt;/a&gt;.
+With an event providing context to the message producer, what is outsourced to this service is mostly the decision of what events should be published to the outside world and the mechanics of using the messaging platform.&lt;/p&gt;
+
+&lt;p&gt;However, the same data model concerns pointed out in &lt;a href=&quot;#change-data-capture-cdc&quot;&gt;Change Data Capture (CDC)&lt;/a&gt; also apply here, and it shouldn’t fall into the trap of leaking the message model to the event model,
+the publishing service should perform stream-table join operations when needed to enrich the message, gathering related data that is not directly present in the event.&lt;/p&gt;
+
+&lt;p&gt;The act of publishing a stream of internal events to the &lt;em&gt;data that live outside&lt;/em&gt; is also called &lt;em&gt;Projection&lt;/em&gt;, and in recent work, I used the &lt;a href=&quot;https://github.com/jet/propulsion&quot;&gt;Propulsion&lt;/a&gt; library on .NET to implement a Projection.
+Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.&lt;/p&gt;</content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html">The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</summary></entry><entry><title type="html">Partial execution: At-most-once vs. At-least-once Deliveries</title><link href="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html" rel="alternate" type="text/html" title="Partial execution: At-most-once vs. At-least-once Deliveries" /><published>2022-06-16T00:00:00+00:00</published><updated>2022-06-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html">&lt;p&gt;A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;What if some infrastructure component goes down during the workflow execution and it can’t complete?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;The beginning of the workflow may execute, but some parts at the end may not, the side effects of this workflow are then partially applied.&lt;/p&gt;
+
+&lt;p&gt;This situation leaves data in an incomplete state, that needs to be fixed by either retrying until complete or rollbacking entirely.&lt;/p&gt;
+
+&lt;p&gt;This is a partial execution scenario, and the order in which a workflow executed its steps is directly related to its consistency guarantees.&lt;/p&gt;
+
+&lt;p&gt;It all boils down to what was executed first between the two: The database writing or the message/API request delivery?&lt;/p&gt;
+
+&lt;h1 id=&quot;at-most-once-delivery&quot;&gt;At-most-once delivery&lt;/h1&gt;
+
+&lt;p&gt;Consider a feature for Report Generation that is done asynchronously and may take minutes to complete, the user is updated by email about each stage of the process.&lt;/p&gt;
+
+&lt;p&gt;When creating the Report generation request, the system sends an email to the customer to log that a Report Request was created and will be processed soon.&lt;/p&gt;
+
+&lt;p&gt;The steps of this workflow are:&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;The client calls the Report API passing on a &lt;em&gt;ReportRequestId&lt;/em&gt; and criteria for the report&lt;/li&gt;
+  &lt;li&gt;The API validates if that &lt;em&gt;ReportRequestId&lt;/em&gt; is already created&lt;/li&gt;
+  &lt;li&gt;If yes, it returns an &lt;em&gt;HTTP 409&lt;/em&gt; code to signal the Id provided has already been taken by an existing resource&lt;/li&gt;
+  &lt;li&gt;If not, it creates the &lt;em&gt;ReportRequest&lt;/em&gt; record in the database&lt;/li&gt;
+  &lt;li&gt;In the end, it sends a request to an Email platform to update the customer that the &lt;em&gt;ReportRequest&lt;/em&gt; was created&lt;/li&gt;
+  &lt;li&gt;Returns an &lt;em&gt;HTTP 201&lt;/em&gt; code&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p style=&quot;text-align:center;&quot;&gt;&lt;img class=&quot;mermaid&quot; src=&quot;https://mermaid.ink/svg/eyJjb2RlIjoiZmxvd2NoYXJ0IFRCXG5BKDEuIEdlbmVyYXRlIFJlcG9ydCBIVFRQIHJlcXVlc3QpIC0tPiB8SUQ6ICcxMjMnfCBCezIuIERvZXMgKlJlcG9ydFJlcXVlc3QqICcxMjMnIGV4aXN0P31cbkIgLS0-IHxZZXN8IEMoXCIzLiBSZXR1cm4gSFRUUCA0MDkgXFxuICM0MDtFbmQjNDE7XCIpXG5CIC0tPiB8Tm98IERbKDQuIENyZWF0ZSAqUmVwb3J0UmVxdWVzdCogcmVjb3JkIFxcbiBvbiBkYXRhYmFzZSldXG5EIC0tPiBFPjUuIFNlbmQgSFRUUCByZXF1ZXN0IHRvIEVtYWlsIFBsYXRmb3JtXVxuRSAtLT4gRihcIjYuIFJldHVybiBIVFRQIDIwMSBcXG4gIzQwO0VuZCM0MTtcIikiLCJtZXJtYWlkIjpudWxsfQ&quot; /&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;What if the Email platform is down at step 5?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;The workflow created the &lt;em&gt;ReportRequest&lt;/em&gt; record on the database, and now any attempt to retry the request will execute up to step 3.&lt;/p&gt;
+
+&lt;p&gt;This is because typically there is a database writing step that marks the workflow as completed (step 4), together with an idempotency guard (step 2) to suppress duplicated side effects.&lt;/p&gt;
+
+&lt;p&gt;After a request is marked as completed, the service has no way to distinguish between the scenario where a client is sending a duplicated request or the scenario where a client is retrying a partially executed request.&lt;/p&gt;
+
+&lt;p&gt;In summary, in the best-case scenario, step 5 successfully sends the Email request once, otherwise, the Email request is lost forever.&lt;/p&gt;
+
+&lt;p&gt;This is an at-most-once guarantee, i.e. no guaranteed delivery.
+Its implementation executes the final database writing before the message or request is sent.
+This model is applied to non-critical communication that presents low business impact if it is never sent.&lt;/p&gt;
+
+&lt;p&gt;At-most-once delivery isn’t suitable for critical communication though, one that triggers a chain of required processing on other services.
+If the message is lost forever, other services will never be able to pick it up to continue processing.&lt;/p&gt;
+
+&lt;h1 id=&quot;at-least-once-delivery&quot;&gt;At-least-once delivery&lt;/h1&gt;
+
+&lt;p&gt;Let’s imagine another scenario with an Order creation service that produces an &lt;em&gt;OrderCreated&lt;/em&gt; message to trigger workflows downstream for handling payments, reserving inventory, producing reports, etc.&lt;/p&gt;
+
+&lt;p&gt;The steps of this workflow are:&lt;/p&gt;
+&lt;ol&gt;
+  &lt;li&gt;The client calls the Order API passing on the Order payload&lt;/li&gt;
+  &lt;li&gt;The API validates if that OrderId is already created&lt;/li&gt;
+  &lt;li&gt;If yes, it returns an &lt;em&gt;HTTP 409&lt;/em&gt; code to signal the Id provided has already been taken by an existing resource&lt;/li&gt;
+  &lt;li&gt;If not, it produces an OrderCreated message to a topic&lt;/li&gt;
+  &lt;li&gt;In the end, it creates the Order record on the database&lt;/li&gt;
+  &lt;li&gt;Returns an &lt;em&gt;HTTP 201&lt;/em&gt; code&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p style=&quot;text-align:center;&quot;&gt;&lt;img class=&quot;mermaid&quot; src=&quot;https://mermaid.ink/svg/eyJjb2RlIjoiZmxvd2NoYXJ0IFRCXG5BKDEuIE9yZGVyIENyZWF0ZSBIVFRQIHJlcXVlc3QpIC0tPiB8SUQ6ICcxMjMnfCBCezIuIERvZXMgT3JkZXIgJzEyMycgZXhpc3Q_fVxuQiAtLT4gfFllc3wgQyhcIjMuIFJldHVybiBIVFRQIDQwOSBcXG4gIzQwO0VuZCM0MTtcIilcbkIgLS0-IHxOb3wgRFsvNC4gUHJvZHVjZSBPcmRlckNyZWF0ZWQgbWVzc2FnZS9dXG5EIC0tPiBFWyg1LiBDcmVhdGUgT3JkZXIgcmVjb3JkIFxcbiBvbiBkYXRhYmFzZSldXG5FIC0tPiBGKFwiNi4gUmV0dXJuIEhUVFAgMjAxIFxcbiAjNDA7RW5kIzQxO1wiKSIsIm1lcm1haWQiOm51bGx9&quot; /&gt;&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;What if the &lt;em&gt;OrderCreated&lt;/em&gt; message producing fails at step 4?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;In a partial execution scenario, the workflow will be retried until the final database writing succeeds, and the request is marked as completed.
+As the message is produced before the database writing, the message is guaranteed to be sent.&lt;/p&gt;
+
+&lt;p&gt;This is an at-least-once guarantee, it is a stronger guarantee than at-most-once and ensures the message is always delivered.&lt;/p&gt;
+
+&lt;p&gt;This provides a strong enough guarantee for most workflows while simple enough.
+I happened to work on the redesign of a system fully based on &lt;a href=&quot;../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html#change-data-capture-cdc&quot;&gt;Change Data Capture&lt;/a&gt; that was migrating to this model for its simplicity and for providing enough consistency for most of our workflows.&lt;/p&gt;
+
+&lt;p&gt;However, there are still challenges with this model, as described below.&lt;/p&gt;
+
+&lt;h5 id=&quot;idempotency&quot;&gt;Idempotency&lt;/h5&gt;
+
+&lt;p&gt;This model allows a service to produce the same message &lt;em&gt;N&lt;/em&gt; times, as it retries &lt;em&gt;N&lt;/em&gt; times, hence it doesn’t take care of suppressing duplicated side effects anymore.&lt;/p&gt;
+
+&lt;p&gt;Services consuming the &lt;em&gt;OrderCreated&lt;/em&gt; message may assume multiple Orders were created.&lt;/p&gt;
+
+&lt;p&gt;This model requires that messages are designed to be uniquely identified, e.g. by an &lt;em&gt;OrderId&lt;/em&gt; field, and requires an effort across the system to ensure this identifier is used for deduplication and idempotency&lt;/p&gt;
+
+&lt;p&gt;This is easy though because services should be idempotent anyway to be resilient to situations that may cause messages to be consumed more than once even though it was produced only once, such as when processing in batches or consumer offset skews.&lt;/p&gt;
+
+&lt;h5 id=&quot;race-conditions&quot;&gt;Race conditions&lt;/h5&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;What if it fails at step 5 and takes many retries to succeed?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;During this time window, downstream services may have already processed the &lt;em&gt;OrderCreated&lt;/em&gt; message faster than the database writing finally succeeds.
+Maybe one of these services attempted to make HTTP requests back to your service to ask for more information about the Order and it failed because the Order didn’t even exist yet.&lt;/p&gt;
+
+&lt;p&gt;Race conditions are temporary inconsistencies and are at the heart of developing distributed systems, and services must be designed with resilience in mind, assuming anything may be unavailable and fail at anytime.&lt;/p&gt;
+
+&lt;p&gt;As far as things are eventually consistent it is possible to mitigate these situations with resilience guards, to ensure all required conditions are in place and avoiding assumptions before executing anything, the same way you would validate if inputs are &lt;em&gt;null&lt;/em&gt; before executing your function.&lt;/p&gt;
+
+&lt;h5 id=&quot;rollbacks&quot;&gt;Rollbacks&lt;/h5&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;What if only at step 5 do you discover the Order can’t be created?&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;Possible scenarios:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Some of the business invariants are checked at the database level&lt;/li&gt;
+  &lt;li&gt;This is a non-deterministic flow such as a reservation, and the database writing fails to avoid overbooking&lt;/li&gt;
+  &lt;li&gt;The client just gives up on the Order and stops retrying&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Now downstream services are already processing the message, handling payment, and moving inventory. It rippled out a permanent inconsistency across the system.&lt;/p&gt;
+
+&lt;p&gt;As &lt;a href=&quot;https://queue.acm.org/detail.cfm?id=3415014&quot;&gt;Pat Helland’s paper&lt;/a&gt; describes, data that lives outside is immutable, a message can’t be un-sent and rollback across many services takes a heavy toll.&lt;/p&gt;
+
+&lt;p&gt;To roll back, it needs to span a whole Order Cancellation &lt;a href=&quot;https://microservices.io/patterns/data/saga.html&quot;&gt;Saga&lt;/a&gt;, to notify other services and allow them to take compensatory actions, e.g. refund payment.&lt;/p&gt;
+
+&lt;p&gt;Sagas are costly to implement tough, it requires strong coordination and testing between multiple teams, and it is usually designed by a high-level architect that understands most of the system.&lt;/p&gt;
+
+&lt;h1 id=&quot;dual-writes&quot;&gt;Dual-writes&lt;/h1&gt;
+
+&lt;p&gt;The strategies above follow the &lt;em&gt;dual-writes&lt;/em&gt; pattern, which is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.&lt;/p&gt;
+
+&lt;p&gt;To ensure messages are delivered while mitigating the costs of rollbacks, a service needs atomicity guarantees that are not provided by this pattern.
+Follow the &lt;a href=&quot;../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html&quot;&gt;Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing&lt;/a&gt; post to learn more about strategies that provides atomicity.&lt;/p&gt;</content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html">A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.</summary></entry></feed>
