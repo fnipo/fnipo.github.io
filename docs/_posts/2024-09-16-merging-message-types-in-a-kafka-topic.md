@@ -1,3 +1,12 @@
+---
+title:  "Merging Message Types in a Kafka Topic"
+date:   2024-09-16 00:00:00 +0000
+categories: distributed-systems
+tags: distributed-systems
+header:
+    og_image: /assets/2024-09-16.jpg
+---
+
 When I first started designing event-driven systems I followed the guideline of separating each message type into 
 its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.
 
