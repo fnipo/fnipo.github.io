@@ -4,4 +4,7 @@ _site
 .jekyll-metadata
 vendor
 
-/unstaged
+docs/unstaged
+
+.vs
+.vscode
