@@ -33,15 +33,39 @@ The steps of this workflow are:
 5. In the end, it sends a request to an Email platform to update the customer that the *ReportRequest* was created
 6. Returns an *HTTP 201* code
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart TB
-    A(1. Generate Report HTTP request) --> |ID: '123'| B{2. Does *ReportRequest* '123' exist?}
-    B --> |Yes| C("3. Return HTTP 409 \n #40;End#41;")
-    B --> |No| D[(4. Create *ReportRequest* record \n on database)]
-    D --> E>5. Send HTTP request to Email Platform]
-    E --> F("6. Return HTTP 201 \n #40;End#41;")
-```
+```plantuml!
+@startuml
+
+!theme bluegray
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #acacac
+skinparam DatabaseFontColor #5a5a5a
+skinparam CloudBorderColor #acacac
+skinparam CloudFontColor #5a5a5a
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+top to bottom direction
+
+rectangle "1. Generate Report HTTP request" as generate_request
+
+rectangle "2. Does *ReportRequest* '123' exist?" as check_exists
+
+rectangle "3. Return HTTP 409\n(End)" as conflict_response
+database "4. Create *ReportRequest* record\non database" as create_record
+cloud "5. Send HTTP request to Email Platform" as email_request
+rectangle "6. Return HTTP 201\n(End)" as created_response
+
+generate_request --> check_exists: Id: '123'
+check_exists --> conflict_response : Yes
+check_exists --> create_record : No
+create_record --> email_request
+email_request --> created_response
+
+@enduml
+```{: .align-center}
 
 > What if the Email platform is down at step 5?
 
@@ -72,15 +96,42 @@ The steps of this workflow are:
 5. In the end, it creates the Order record on the database
 6. Returns an *HTTP 201* code
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart TB
-    A(1. Order Create HTTP request) --> |ID: '123'| B{2. Does Order '123' exist?}
-    B --> |Yes| C("3. Return HTTP 409 \n #40;End#41;")
-    B --> |No| D[/4. Produce OrderCreated message/]
-    D --> E[(5. Create Order record \n on database)]
-    E --> F("6. Return HTTP 201 \n #40;End#41;")
-```
+```plantuml!
+@startuml
+
+!theme bluegray
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #acacac
+skinparam DatabaseFontColor #5a5a5a
+skinparam CloudBorderColor #acacac
+skinparam CloudFontColor #5a5a5a
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+top to bottom direction
+
+rectangle "1. Order Create HTTP request" as order_request
+
+rectangle "2. Does Order '123' exist?" as check_order
+
+rectangle "3. Return HTTP 409\n(End)" as conflict_response
+
+queue "4. Produce OrderCreated message" as produce_message
+
+database "5. Create Order record\non database" as create_order
+
+rectangle "6. Return HTTP 201\n(End)" as created_response
+
+order_request --> check_order : Id: '123'
+check_order --> conflict_response : Yes
+check_order --> produce_message : No
+produce_message --> create_order
+create_order --> created_response
+
+@enduml
+```{: .align-center}
 
 > What if the *OrderCreated* message producing fails at step 4?
 

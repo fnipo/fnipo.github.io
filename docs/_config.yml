@@ -37,6 +37,9 @@ plugins:
 
 safe: true
 
+# include:
+#   - _includes/head-custom.html
+
 # Exclude from processing.
 # The following items will not be processed, by default.
 # Any item listed under the `exclude:` key here will be automatically added to
@@ -62,6 +65,10 @@ safe: true
 # --- Minimal-mistakes config ---
 minimal_mistakes_skin: "default"
 
+# font:
+#   body: "Inter, sans-serif"
+#   heading: "Inter, sans-serif"
+
 locale: "en"
 
 #logo: "/assets/images/88x88.png"
@@ -76,6 +83,7 @@ defaults:
       type: pages
     values:
       author_profile: true
+      classes: wide
 
   # _posts
   - scope:
@@ -83,6 +91,7 @@ defaults:
       type: posts
     values:
       layout: single
+      classes: wide
       author_profile: true
       share: true
       show_date: false

@@ -23,8 +23,8 @@ From [AWS SLAs][aws-slas]:
 - AWS databases availability is 99.5% (1-day downtime a year)
 
 Following the formula for the compound probability of independent events occurring together:
-$ P (A \text{ and } B) = P(A) * P(B) $
 
+$ P (A \text{ and } B) = P(A) * P(B) $
 $ 0.995 * 0.995 = 0.990 $
 
 The overall workflow availability based on dual-writes is reduced to 99.0%, and downtime is amplified to 3-days a year.
@@ -44,13 +44,42 @@ Databases provide CDC in one of these two flavors:
 One could make a dedicated service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the *OrderCreated* message asynchronously.
 This design provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart LR
-    A(Order service) --> |Insert Order| B[(Order table)]
-    B --> |CDC| C(Message producer)
-    C --> |OrderCreated| D[/Messaging platform/]
-```
+```plantuml!
+@startuml
+
+!theme bluegray
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #acacac
+skinparam DatabaseFontColor #5a5a5a
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+left to right direction
+
+rectangle order_service [
+    **Order service**
+]
+
+database order_table [
+    **Order table**
+]
+
+rectangle message_producer [
+    **Message producer**
+]
+
+queue messaging_platform [
+    **Messaging platform**
+]
+
+order_service --> order_table : Insert Order
+order_table --> message_producer : CDC
+message_producer --> messaging_platform : OrderCreated
+
+@enduml
+```{: .align-center}
 
 This is an idea I explored in a previous work when refactoring a project, and while it is on the right track I realized this would be a bad idea.
 
@@ -72,14 +101,47 @@ A workflow can either do both data and message writing atomically in a database 
 
 Also, the workflows have full control over defining and populating the message.
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart TD
-    A(Order service) --> |Insert Order| B[(Order table)]
-    A(Order service) --> |Insert OrderCreated| C[(OrderCreated outbox table)]
-    C --> |Change captured| D(Message producer)
-    D --> |OrderCreated| E[/Messaging platform/]
-```
+```plantuml!
+@startuml
+
+!theme bluegray
+skinparam DatabaseBackgroundColor #FFFFFF
+skinparam DatabaseBorderColor #acacac
+skinparam DatabaseFontColor #5a5a5a
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+top to bottom direction
+
+rectangle order_service [
+    **Order service**
+]
+
+database order_table [
+    **Order table**
+]
+
+database outbox_table [
+    **OrderCreated outbox table**
+]
+
+rectangle message_producer [
+    **Message producer**
+]
+
+queue messaging_platform [
+    **Messaging platform**
+]
+
+order_service --> order_table : Insert Order
+order_service --> outbox_table : Insert OrderCreated
+outbox_table --> message_producer : Change captured
+message_producer --> messaging_platform : OrderCreated
+
+@enduml
+```{: .align-center}
 
 The outbox pattern guarantees the message is eventually produced to the messaging platform, and it increases the workflow availability by depending only on the database availability.
 
@@ -96,7 +158,7 @@ Events are part of the *data that lives inside* (but also immutable) and part of
 Unfortunately, the *Event* term is overloaded and used in both situations, messages are even called *integration events* in the DDD world,
 [Martin Fowler][martin-fowler-twitter] has a nice presentation on the many meanings of the *Event* term:
 
-![](https://www.youtube.com/watch?v=STKCRSUsyP0&width=400&height=250){: .align-center}
+![](https://www.youtube.com/watch?v=STKCRSUsyP0&width=400&height=250)
 
 An event is a kind of data that carries context to communicate what has happened to an aggregate.
 And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in [Change Data Capture (CDC)](#change-data-capture-cdc).

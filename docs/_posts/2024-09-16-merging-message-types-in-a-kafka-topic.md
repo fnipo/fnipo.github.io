@@ -14,45 +14,98 @@ As I encountered systems with hundreds of kafka topics, I began to see some down
 - Do we need to apply eventual consistency everywhere?
 - How can we make a simpler version of this complexity?
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart LR
-    order_producer["Order Messages Producer"]
-    inventory_consumer["Inventory Domain Consumer"]
-    reporting_consumer["Reporting Domain Consumer"]
-    order_created_topic[/"OrderCreated Topic"/]
-    order_processed_topic[/"OrderProcessed Topic"/]
-    order_packed_topic[/"OrderPacked Topic"/]
-    order_shipped_topic[/"OrderShipped Topic"/]
+```plantuml!
+@startuml
 
-    order_producer -->|"Produces OrderCreated (pk: orderId)"| order_created_topic
-    order_producer -->|"Produces OrderProcessed (pk: orderId)"| order_processed_topic
-    order_producer -->|"Produces OrderPacked (pk: orderId)"| order_packed_topic
-    order_producer -->|"Produces OrderShipped (pk: orderId)"| order_shipped_topic
-    order_created_topic -->|Consumes to handle products pre-reservation| inventory_consumer
-    order_created_topic -->|Consumes for auditing| reporting_consumer
-    order_processed_topic -->|Consumes for auditing| reporting_consumer
-    order_packed_topic -->|Consumes for auditing| reporting_consumer
-    order_shipped_topic -->|Consumes for auditing| reporting_consumer
-```
+!theme bluegray
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+left to right direction
+
+rectangle order_producer [
+    **Order Messages Producer**
+]
+
+queue order_created_topic [
+    **OrderCreated Topic**
+]
+
+queue order_processed_topic [
+    **OrderProcessed Topic**
+]
+
+queue order_packed_topic [
+    **OrderPacked Topic**
+]
+
+queue order_shipped_topic [
+    **OrderShipped Topic**
+]
+
+rectangle inventory_consumer [
+    **Inventory Domain Consumer**
+]
+
+rectangle reporting_consumer [
+    **Reporting Domain Consumer**
+]
+
+order_producer --> order_created_topic : Produces OrderCreated\n(pk: orderId)
+order_producer --> order_processed_topic : Produces OrderProcessed\n(pk: orderId)
+order_producer --> order_packed_topic : Produces OrderPacked\n(pk: orderId)
+order_producer --> order_shipped_topic : Produces OrderShipped\n(pk: orderId)
+
+order_created_topic --> inventory_consumer : Consumes to handle\nproducts pre-reservation
+order_created_topic --> reporting_consumer : Consumes for auditing
+order_processed_topic --> reporting_consumer : Consumes for auditing
+order_packed_topic --> reporting_consumer : Consumes for auditing
+order_shipped_topic --> reporting_consumer : Consumes for auditing
+
+@enduml
+```{: .align-center}
 
 We decided to refactor our system, taking onboard a model where multiple messages types could coexist within a single topic, as long as the messages belong to the same domain and have symmetric volumes. It allowed to commit only to the complexity needed on a case-by-case basis, optimizing for people's cognitive resources - the most expensive resource at any company.
 
-{:style="text-align:center;"}
-```mermaid!
-flowchart LR
-    order_producer["Order Messages Producer"]
-    inventory_consumer["Inventory Domain Consumer"]
-    reporting_consumer["Reporting Domain Consumer"]
-    topic[/"Order Topic"/]
+```plantuml!
+@startuml
 
-    order_producer -->|"Produces OrderCreated (pk: orderId)"| topic
-    order_producer -->|"Produces OrderProcessed (pk: orderId)"| topic
-    order_producer -->|"Produces OrderPacked (pk: orderId)"| topic
-    order_producer -->|"Produces OrderShipped (pk: orderId)"| topic
-    topic -->|"Consumes OrderCreated to handle products pre-reservation"| inventory_consumer
-    topic -->|"Consumes all Order messages for auditing"| reporting_consumer
-```
+!theme bluegray
+skinparam QueueBackgroundColor #FFFFFF
+skinparam QueueBorderColor #acacac
+skinparam QueueFontColor #5a5a5a
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor Gray
+left to right direction
+
+rectangle order_producer [
+    **Order Messages Producer**
+]
+
+queue topic [
+    **Order Topic**
+]
+
+rectangle inventory_consumer [
+    **Inventory Domain Consumer**
+]
+
+rectangle reporting_consumer [
+    **Reporting Domain Consumer**
+]
+
+order_producer --> topic : Produces OrderCreated\n(pk: orderId)
+order_producer --> topic : Produces OrderProcessed\n(pk: orderId)
+order_producer --> topic : Produces OrderPacked\n(pk: orderId)
+order_producer --> topic : Produces OrderShipped\n(pk: orderId)
+
+topic --> inventory_consumer : Consumes OrderCreated to handle\nproducts pre-reservation
+topic --> reporting_consumer : Consumes all Order messages\nfor auditing
+
+@enduml
+```{: .align-center}
 
 This also shifted my designing approach, I started seeing dedicated topics per message type as an optimization when eventual consistency applies, but as anything in software engineering it comes with trade-offs, the key is to carefully evaluate the trade-offs in the context of your specific need. 
 
