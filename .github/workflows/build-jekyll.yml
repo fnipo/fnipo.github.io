@@ -28,6 +28,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           jekyll_src: './docs'
           jekyll_cfg: '_config.yml'
+          ruby_ver: '3.2.9'                                     # Default is 3.2.0 version
 
       # Use GitHub Deploy Action to build and deploy to Github
       # For latest version: `jeffreytse/jekyll-deploy-action@master`
