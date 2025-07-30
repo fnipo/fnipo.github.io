@@ -36,9 +36,8 @@ plugins:
   - jekyll-spaceship
 
 safe: true
-
-# include:
-#   - _includes/head-custom.html
+sass:
+  quiet_deps: true  # Suppress deprecation warnings that come from dependencies. Disable to debug building issues.
 
 # Exclude from processing.
 # The following items will not be processed, by default.
