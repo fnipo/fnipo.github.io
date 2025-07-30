@@ -31,7 +31,7 @@ jobs:
           repository: ''                                        # Default is current repository
           branch: 'gh-pages'                                    # Default is gh-pages for github provider
           jekyll_src: './docs'                                  # Default is root directory
-          jekyll_cfg: './docs/_config.yml'                      # Default is _config.yml
+          jekyll_cfg: '_config.yml'                             # Default is _config.yml
           jekyll_baseurl: ''                                    # Default is according to _config.yml
           ruby_ver: '3.2.0'                                     # Default is 3.2.0 version
           bundler_ver: ''                                       # Default is compatible bundler version (~>2.5.0)
