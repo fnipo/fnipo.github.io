@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.4">Jekyll</generator><link href="https://fnipo.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://fnipo.github.io/" rel="alternate" type="text/html" /><updated>2025-07-30T00:55:42+00:00</updated><id>https://fnipo.github.io/feed.xml</id><title type="html">Felipe Nipo</title><subtitle>12+ years experience as Software Engineer with a post-graduate degree, experience in backend development with exposure to distributed systems, event sourcing, and event-driven architectures.</subtitle><author><name>Felipe Nipo</name></author><entry><title type="html">Merging Message Types in a Kafka Topic</title><link href="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html" rel="alternate" type="text/html" title="Merging Message Types in a Kafka Topic" /><published>2024-09-16T00:00:00+00:00</published><updated>2024-09-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html"><![CDATA[<p>When I first started designing event-driven systems I followed the guideline of separating each message type into 
+its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.</p>
+
+<p>As I encountered systems with hundreds of kafka topics, I began to see some downsides, the sheer amount of moving parts and their interactions made it hard to account for all the potential race conditions and eventual consistency scenarios, it became a cognitive burden on the team, leading us to rethink our approach. We started asking ourselves:</p>
+<ul>
+  <li>Do we need to apply eventual consistency everywhere?</li>
+  <li>How can we make a simpler version of this complexity?</li>
+</ul>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a7175657565206f726465725f637265617465645f746f706963205b0a202020202a2a4f726465724372656174656420546f7069632a2a0a5d0a0a7175657565206f726465725f70726f6365737365645f746f706963205b0a202020202a2a4f7264657250726f63657373656420546f7069632a2a0a5d0a0a7175657565206f726465725f7061636b65645f746f706963205b0a202020202a2a4f726465725061636b656420546f7069632a2a0a5d0a0a7175657565206f726465725f736869707065645f746f706963205b0a202020202a2a4f726465725368697070656420546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e206f726465725f637265617465645f746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f70726f6365737365645f746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f7061636b65645f746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f736869707065645f746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a6f726465725f637265617465645f746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d657320746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a6f726465725f637265617465645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f70726f6365737365645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f7061636b65645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f736869707065645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>We decided to refactor our system, taking onboard a model where multiple messages types could coexist within a single topic, as long as the messages belong to the same domain and have symmetric volumes. It allowed to commit only to the complexity needed on a case-by-case basis, optimizing for people’s cognitive resources - the most expensive resource at any company.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a717565756520746f706963205b0a202020202a2a4f7264657220546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d6573204f726465724372656174656420746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320616c6c204f72646572206d657373616765735c6e666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>This also shifted my designing approach, I started seeing dedicated topics per message type as an optimization when eventual consistency applies, but as anything in software engineering it comes with trade-offs, the key is to carefully evaluate the trade-offs in the context of your specific need.</p>
+
+<h2 id="the-benefits">The Benefits</h2>
+<h4 id="guaranteed-message-ordering">Guaranteed Message Ordering</h4>
+<p>The ability to ensure ordering between different message types is a huge advantage!</p>
+
+<p>For example, with a single Order topic and <code class="language-plaintext highlighter-rouge">Orderld</code> as partition key, you eliminate the risk of consuming an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message before an <code class="language-plaintext highlighter-rouge">OrderCreated</code> message. In systems where these messages are on it’s own topics, race condition scenarios could allow a consumer to receive an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message for an Order it doesn’t know exists yet, having to decide between being stuck with the inconsistent message or having to rely on a DLQ and Retry flows.</p>
+
+<p>By leveraging Kafka’s ordering guarantee within partitions, you can avoid these eventual consistency complexities altogether.</p>
+
+<h4 id="kafka-cluster-performance">Kafka Cluster Performance</h4>
+<p>Kafka clusters can suffer performance degradation as the number of topics grows, particularly due to the increase in the amount of partitions overall. Aiming to keep the total number of partitions in the low hundreds helps maintain optimal performance.</p>
+
+<p>In an extreme scenario where there are many granular topics - topics with low-throughput where a single partition more than suffices - consolidating them into fewer coarse topics leads to less partitions being needed in the shared topic, when compared with the sum of partitions from individual topics.</p>
+
+<h2 id="the-drawbacks">The Drawbacks</h2>
+<h4 id="limited-filtering-capabilities">Limited Filtering Capabilities</h4>
+<p>Consumers aren’t able to filter out uninteresting messages, they must consume all messages in the topic and “do nothing” when handling those that aren’t of interest.</p>
+
+<p>This leads to resource waste, and it’s important to consider the Consumer Hit rate - the frequency with which they process messages of interest. If it’s too low and leading to relevant resource waste, consider splitting message types into their own topics.</p>
+
+<p>The best scenario is when the message types within a topic have similar message volumes, making the hit rate even between consumers.</p>
+
+<h4 id="resilience-considerations">Resilience Considerations</h4>
+<p>Less isolation often translates to less resilience, and given messages aren’t isolated on their own topic anymore, they can interfere with each other consumption.</p>
+
+<p>In case a producer introduces a “poison pill” in the topic - a message that causes consumers to fail - it can affect all consumers from that topic, this is why it’s important to ensure the topic belongs to a domain, following a Domain-Driven Design (DDD) approach.</p>
+
+<p>If the message types are from different domains, it means the topic has a shared ownership between multiple bounded-contexts. This coupling can tie their availability together, meaning a failure in one part can cascade across the system and bring multiple parts of your system down together.</p>
+
+<h4 id="services-memory-consumption">Services Memory Consumption</h4>
+<p>On another extreme scenario, when high-traffic topics are consolidated into one, the amount of partitions of the consolidated topic will be multiplied to scale to the much higher load.</p>
+
+<p>A large number of partitions per topic results in more metadata for producers and consumers to manage, leading to increased memory consumption.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>Merging multiple message types into a single Kafka topic is a pattern that provides a stronger consistency guarantees, that can significantly reduce complexity and simplify maintenance, by leveraging Kafka’s ordering guarantees and reducing the amount of moving parts.</p>
+
+<p>If you’re currently grappling with an event-driven architecture, I challenge you to consider whether consolidating topics could benefit your system, think about which parts of your system benefits from eventual consistency, and which could be simplified with this approach.</p>
+
+<p>If you decide to try it, I’d love to hear about your experience!</p>
+
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+  <li><a href="https://martin.kleppmann.com/2018/01/18/event-types-in-kafka-topic.html">Martin Kleppman’s blog post: “Should you put several event types in the same Kafka topic?”</a>: This was an inspiration for my team and influenced our system’s refactoring</li>
+  <li><a href="https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster">Confluent.io post: “How to Choose the Number of Topics/Partitions in a Kafka Cluster?”</a>: Explains how the amount of partitions impacts a Kafka cluster performance</li>
+  <li><a href="https://www.goodreads.com/book/show/28602719-domain-driven-design-distilled">“Domain-Driven Design Distilled” book by Vaughn Vernon</a>: A must-read for any software engineer to get introduced to the challenges involved in managing the complexities of systems and how a Domain mindset can help tackle them.</li>
+</ul>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[When I first started designing event-driven systems I followed the guideline of separating each message type into its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.]]></summary></entry><entry><title type="html">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing</title><link href="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" rel="alternate" type="text/html" title="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing" /><published>2022-06-17T00:00:00+00:00</published><updated>2022-06-17T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html"><![CDATA[<p>The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</p>
+
+<p>This is typically used on systems that can’t compromise availability with locking strategies such as <a href="https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html">Two Phase Commit</a>.</p>
+
+<p>As explained in the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html">Partial execution: At-most-once vs. At-least-once Deliveries</a> post, this presents consistency challenges in partial execution scenarios, particularly when involving non-queriable storage such as a message bus.
+Managing inconsistencies gets even more challenging as a workflow is extended to write to more storages: databases, messaging platforms, cache, elasticsearch, etc…</p>
+
+<p>A workflow may require stronger consistency that guarantees atomicity, which means a guarantee that either the two writes succeed or none of them do, so there is never a partial state.</p>
+
+<p>Another concern with dual-writes is that it reduces the overall availability of a workflow as it is tied to the availability of multiple infrastructure components:</p>
+
+<p>From <a href="https://aws.amazon.com/legal/service-level-agreements/">AWS SLAs</a>:</p>
+<ul>
+  <li>AWS messaging availability is 99.5% (1-day downtime a year)</li>
+  <li>AWS databases availability is 99.5% (1-day downtime a year)</li>
+</ul>
+
+<p>Following the formula for the compound probability of independent events occurring together:</p>
+
+<p>$ P (A \text{ and } B) = P(A) * P(B) $
+$ 0.995 * 0.995 = 0.990 $</p>
+
+<p>The overall workflow availability based on dual-writes is reduced to 99.0%, and downtime is amplified to 3-days a year.</p>
+
+<h1 id="change-data-capture-cdc">Change Data Capture (CDC)</h1>
+
+<p>CDC is a built-in feature in databases such as <a href="https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html">Cassandra</a> and <a href="https://docs.microsoft.com/en-us/azure/cosmos-db/sql/change-feed-processor">Cosmos DB</a> to allow subscription on data changes, i.e. the Observer pattern, with an at-least-once delivery guarantee.</p>
+
+<p>It allows the implementation of a service that reacts to data changes and do some operation, similar to what traditional Triggers provided but completely extracting logic from the database layer.</p>
+
+<p>Databases provide CDC in one of these two flavors:</p>
+<ul>
+  <li>Pull-based: Essentially a long and continuous query. Changes are handled in batches to counter polling latency and are ordered by the date and time they happened. It can capture inserts and updates but is limited when capturing deletes.</li>
+  <li>Push-based: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.</li>
+</ul>
+
+<blockquote>
+  <p>How could CDC help to avoid rollbacks on the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html#at-least-once-delivery">at-least-once scenario</a>?</p>
+</blockquote>
+
+<p>One could make a dedicated service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the <em>OrderCreated</em> message asynchronously.
+This design provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204344430a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>This is an idea I explored in a previous work when refactoring a project, and while it is on the right track I realized this would be a bad idea.</p>
+
+<p>The main problem is that it takes away from the workflow the power of defining the message content, leading to:</p>
+<ul>
+  <li>Increased complexity because the message definition logic is now hidden on this intermediate service that produces the <em>OrderCreated</em> message</li>
+  <li>The job of the <em>OrderCreated</em> message producer is not easy, it is based on lots of inferences, mainly because it doesn’t have enough context to do its job except for what it reads from the database Order data model</li>
+  <li>The Order data model may become a mix of data and messaging models to facilitate the job of the <em>OrderCreator</em> producer. It tries to satisfy both needs but ultimately not fitting any</li>
+  <li>Strong coupling between the message model and the Order data model</li>
+</ul>
+
+<h1 id="the-outbox-pattern">The Outbox Pattern</h1>
+
+<p>A simpler approach based on CDC is by implementing an Outbox, to define clear boundaries between the data model and the message model.</p>
+
+<p>In the Outbox Pattern the database is used as a queue and leverages a <a href="https://microservices.io/patterns/data/transaction-log-tailing.html">Transaction Log Tailing</a> mechanism based on CDC to replicate data from the database queue to a messaging platform.</p>
+
+<p>The message model is defined on the <em>OrderCreatedOutbox</em> table on the database completely decoupled from the Order table model.</p>
+
+<p>A workflow can either do both data and message writing atomically in a database transaction, or if not using transactions at least be able to query the database to check if the message was populated and retry when needed.</p>
+
+<p>Also, the workflows have full control over defining and populating the message.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a6461746162617365206f7574626f785f7461626c65205b0a202020202a2a4f7264657243726561746564206f7574626f78207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f73657276696365202d2d3e206f7574626f785f7461626c65203a20496e73657274204f72646572437265617465640a6f7574626f785f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204368616e67652063617074757265640a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>The outbox pattern guarantees the message is eventually produced to the messaging platform, and it increases the workflow availability by depending only on the database availability.</p>
+
+<h1 id="event-sourcing">Event Sourcing</h1>
+
+<blockquote>
+  <p>“Eventsourcing uses storage as a way of communication, it solves storage and messaging for you” <br />Vaugh Vernon, on <a href="https://www.goodreads.com/en/book/show/28602719-domain-driven-design-distilled">Domain-Driven Design Distilled</a> book</p>
+</blockquote>
+
+<p>On an event-sourced database, data is stored as if it were messages, there are no tables, instead, there are streams of events that mimic a queue of messages.</p>
+
+<p>When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by <a href="https://queue.acm.org/detail.cfm?id=3415014">Pat Helland’s paper</a> with the difference between <em>data that lives inside</em> and <em>data that lives outside</em>.</p>
+
+<p>Events are part of the <em>data that lives inside</em> (but also immutable) and part of the authoritative data source, while messages are part of the <em>data that lives outside</em> and are designed for communication across <a href="https://martinfowler.com/bliki/BoundedContext.html">Bounded Contexts</a>.</p>
+
+<p>Unfortunately, the <em>Event</em> term is overloaded and used in both situations, messages are even called <em>integration events</em> in the DDD world,
+<a href="https://twitter.com/martinfowler">Martin Fowler</a> has a nice presentation on the many meanings of the <em>Event</em> term:</p>
+
+<p><img src="https://www.youtube.com/watch?v=STKCRSUsyP0&amp;width=400&amp;height=250" alt="" /></p>
+
+<p>An event is a kind of data that carries context to communicate what has happened to an aggregate.
+And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a>.
+With an event providing context to the message producer, what is outsourced to this service is mostly the decision of what events should be published to the outside world and the mechanics of using the messaging platform.</p>
+
+<p>However, the same data model concerns pointed out in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a> also apply here, and it shouldn’t fall into the trap of leaking the message model to the event model,
+the publishing service should perform stream-table join operations when needed to enrich the message, gathering related data that is not directly present in the event.</p>
+
+<p>The act of publishing a stream of internal events to the <em>data that live outside</em> is also called <em>Projection</em>, and in recent work, I used the <a href="https://github.com/jet/propulsion">Propulsion</a> library on .NET to implement a Projection.
+Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.</p>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.]]></summary></entry><entry><title type="html">Partial execution: At-most-once vs. At-least-once Deliveries</title><link href="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html" rel="alternate" type="text/html" title="Partial execution: At-most-once vs. At-least-once Deliveries" /><published>2022-06-16T00:00:00+00:00</published><updated>2022-06-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html"><![CDATA[<p>A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.</p>
+
+<blockquote>
+  <p>What if some infrastructure component goes down during the workflow execution and it can’t complete?</p>
+</blockquote>
+
+<p>The beginning of the workflow may execute, but some parts at the end may not, the side effects of this workflow are then partially applied.</p>
+
+<p>This situation leaves data in an incomplete state, that needs to be fixed by either retrying until complete or rollbacking entirely.</p>
+
+<p>This is a partial execution scenario, and the order in which a workflow executed its steps is directly related to its consistency guarantees.</p>
+
+<p>It all boils down to what was executed first between the two: The database writing or the message/API request delivery?</p>
+
+<h1 id="at-most-once-delivery">At-most-once delivery</h1>
+
+<p>Consider a feature for Report Generation that is done asynchronously and may take minutes to complete, the user is updated by email about each stage of the process.</p>
+
+<p>When creating the Report generation request, the system sends an email to the customer to log that a Report Request was created and will be processed soon.</p>
+
+<p>The steps of this workflow are:</p>
+<ol>
+  <li>The client calls the Report API passing on a <em>ReportRequestId</em> and criteria for the report</li>
+  <li>The API validates if that <em>ReportRequestId</em> is already created</li>
+  <li>If yes, it returns an <em>HTTP 409</em> code to signal the Id provided has already been taken by an existing resource</li>
+  <li>If not, it creates the <em>ReportRequest</em> record in the database</li>
+  <li>In the end, it sends a request to an Email platform to update the customer that the <em>ReportRequest</em> was created</li>
+  <li>Returns an <em>HTTP 201</em> code</li>
+</ol>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d20436c6f7564426f72646572436f6c6f7220236163616361630a736b696e706172616d20436c6f7564466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c652022312e2047656e6572617465205265706f727420485454502072657175657374222061732067656e65726174655f726571756573740a0a72656374616e676c652022322e20446f6573202a5265706f7274526571756573742a2027313233272065786973743f2220617320636865636b5f6578697374730a0a72656374616e676c652022332e2052657475726e2048545450203430395c6e28456e64292220617320636f6e666c6963745f726573706f6e73650a64617461626173652022342e20437265617465202a5265706f7274526571756573742a207265636f72645c6e6f6e20646174616261736522206173206372656174655f7265636f72640a636c6f75642022352e2053656e642048545450207265717565737420746f20456d61696c20506c6174666f726d2220617320656d61696c5f726571756573740a72656374616e676c652022362e2052657475726e2048545450203230315c6e28456e64292220617320637265617465645f726573706f6e73650a0a67656e65726174655f72657175657374202d2d3e20636865636b5f6578697374733a2049643a2027313233270a636865636b5f657869737473202d2d3e20636f6e666c6963745f726573706f6e7365203a205965730a636865636b5f657869737473202d2d3e206372656174655f7265636f7264203a204e6f0a6372656174655f7265636f7264202d2d3e20656d61696c5f726571756573740a656d61696c5f72657175657374202d2d3e20637265617465645f726573706f6e73650a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<blockquote>
+  <p>What if the Email platform is down at step 5?</p>
+</blockquote>
+
+<p>The workflow created the <em>ReportRequest</em> record on the database, and now any attempt to retry the request will execute up to step 3.</p>
+
+<p>This is because typically there is a database writing step that marks the workflow as completed (step 4), together with an idempotency guard (step 2) to suppress duplicated side effects.</p>
+
+<p>After a request is marked as completed, the service has no way to distinguish between the scenario where a client is sending a duplicated request or the scenario where a client is retrying a partially executed request.</p>
+
+<p>In summary, in the best-case scenario, step 5 successfully sends the Email request once, otherwise, the Email request is lost forever.</p>
+
+<p>This is an at-most-once guarantee, i.e. no guaranteed delivery.
+Its implementation executes the final database writing before the message or request is sent.
+This model is applied to non-critical communication that presents low business impact if it is never sent.</p>
+
+<p>At-most-once delivery isn’t suitable for critical communication though, one that triggers a chain of required processing on other services.
+If the message is lost forever, other services will never be able to pick it up to continue processing.</p>
+
+<h1 id="at-least-once-delivery">At-least-once delivery</h1>
+
+<p>Let’s imagine another scenario with an Order creation service that produces an <em>OrderCreated</em> message to trigger workflows downstream for handling payments, reserving inventory, producing reports, etc.</p>
+
+<p>The steps of this workflow are:</p>
+<ol>
+  <li>The client calls the Order API passing on the Order payload</li>
+  <li>The API validates if that OrderId is already created</li>
+  <li>If yes, it returns an <em>HTTP 409</em> code to signal the Id provided has already been taken by an existing resource</li>
+  <li>If not, it produces an OrderCreated message to a topic</li>
+  <li>In the end, it creates the Order record on the database</li>
+  <li>Returns an <em>HTTP 201</em> code</li>
+</ol>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d20436c6f7564426f72646572436f6c6f7220236163616361630a736b696e706172616d20436c6f7564466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c652022312e204f72646572204372656174652048545450207265717565737422206173206f726465725f726571756573740a0a72656374616e676c652022322e20446f6573204f726465722027313233272065786973743f2220617320636865636b5f6f726465720a0a72656374616e676c652022332e2052657475726e2048545450203430395c6e28456e64292220617320636f6e666c6963745f726573706f6e73650a0a71756575652022342e2050726f64756365204f7264657243726561746564206d657373616765222061732070726f647563655f6d6573736167650a0a64617461626173652022352e20437265617465204f72646572207265636f72645c6e6f6e20646174616261736522206173206372656174655f6f726465720a0a72656374616e676c652022362e2052657475726e2048545450203230315c6e28456e64292220617320637265617465645f726573706f6e73650a0a6f726465725f72657175657374202d2d3e20636865636b5f6f72646572203a2049643a2027313233270a636865636b5f6f72646572202d2d3e20636f6e666c6963745f726573706f6e7365203a205965730a636865636b5f6f72646572202d2d3e2070726f647563655f6d657373616765203a204e6f0a70726f647563655f6d657373616765202d2d3e206372656174655f6f726465720a6372656174655f6f72646572202d2d3e20637265617465645f726573706f6e73650a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<blockquote>
+  <p>What if the <em>OrderCreated</em> message producing fails at step 4?</p>
+</blockquote>
+
+<p>In a partial execution scenario, the workflow will be retried until the final database writing succeeds, and the request is marked as completed.
+As the message is produced before the database writing, the message is guaranteed to be sent.</p>
+
+<p>This is an at-least-once guarantee, it is a stronger guarantee than at-most-once and ensures the message is always delivered.</p>
+
+<p>This provides a strong enough guarantee for most workflows while simple enough.
+I happened to work on the redesign of a system fully based on <a href="../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html#change-data-capture-cdc">Change Data Capture</a> that was migrating to this model for its simplicity and for providing enough consistency for most of our workflows.</p>
+
+<p>However, there are still challenges with this model, as described below.</p>
+
+<h5 id="idempotency">Idempotency</h5>
+
+<p>This model allows a service to produce the same message <em>N</em> times, as it retries <em>N</em> times, hence it doesn’t take care of suppressing duplicated side effects anymore.</p>
+
+<p>Services consuming the <em>OrderCreated</em> message may assume multiple Orders were created.</p>
+
+<p>This model requires that messages are designed to be uniquely identified, e.g. by an <em>OrderId</em> field, and requires an effort across the system to ensure this identifier is used for deduplication and idempotency</p>
+
+<p>This is easy though because services should be idempotent anyway to be resilient to situations that may cause messages to be consumed more than once even though it was produced only once, such as when processing in batches or consumer offset skews.</p>
+
+<h5 id="race-conditions">Race conditions</h5>
+
+<blockquote>
+  <p>What if it fails at step 5 and takes many retries to succeed?</p>
+</blockquote>
+
+<p>During this time window, downstream services may have already processed the <em>OrderCreated</em> message faster than the database writing finally succeeds.
+Maybe one of these services attempted to make HTTP requests back to your service to ask for more information about the Order and it failed because the Order didn’t even exist yet.</p>
+
+<p>Race conditions are temporary inconsistencies and are at the heart of developing distributed systems, and services must be designed with resilience in mind, assuming anything may be unavailable and fail at anytime.</p>
+
+<p>As far as things are eventually consistent it is possible to mitigate these situations with resilience guards, to ensure all required conditions are in place and avoiding assumptions before executing anything, the same way you would validate if inputs are <em>null</em> before executing your function.</p>
+
+<h5 id="rollbacks">Rollbacks</h5>
+
+<blockquote>
+  <p>What if only at step 5 do you discover the Order can’t be created?</p>
+</blockquote>
+
+<p>Possible scenarios:</p>
+<ul>
+  <li>Some of the business invariants are checked at the database level</li>
+  <li>This is a non-deterministic flow such as a reservation, and the database writing fails to avoid overbooking</li>
+  <li>The client just gives up on the Order and stops retrying</li>
+</ul>
+
+<p>Now downstream services are already processing the message, handling payment, and moving inventory. It rippled out a permanent inconsistency across the system.</p>
+
+<p>As <a href="https://queue.acm.org/detail.cfm?id=3415014">Pat Helland’s paper</a> describes, data that lives outside is immutable, a message can’t be un-sent and rollback across many services takes a heavy toll.</p>
+
+<p>To roll back, it needs to span a whole Order Cancellation <a href="https://microservices.io/patterns/data/saga.html">Saga</a>, to notify other services and allow them to take compensatory actions, e.g. refund payment.</p>
+
+<p>Sagas are costly to implement tough, it requires strong coordination and testing between multiple teams, and it is usually designed by a high-level architect that understands most of the system.</p>
+
+<h1 id="dual-writes">Dual-writes</h1>
+
+<p>The strategies above follow the <em>dual-writes</em> pattern, which is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</p>
+
+<p>To ensure messages are delivered while mitigating the costs of rollbacks, a service needs atomicity guarantees that are not provided by this pattern.
+Follow the <a href="../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing</a> post to learn more about strategies that provides atomicity.</p>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.]]></summary></entry></feed>
