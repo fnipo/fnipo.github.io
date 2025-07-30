@@ -21,15 +21,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cache-
 
-      # Step to check build status within PRs
-      - uses: jeffreytse/jekyll-deploy-action@v0.6.0
-        with:
-          provider: 'test'
-          token: ${{ secrets.GITHUB_TOKEN }}
-          jekyll_src: './docs'
-          jekyll_cfg: '_config.yml'
-          ruby_ver: '3.2.9'                                     # Default is 3.2.0 version
-
       # Use GitHub Deploy Action to build and deploy to Github
       # For latest version: `jeffreytse/jekyll-deploy-action@master`
       - uses: jeffreytse/jekyll-deploy-action@v0.6.0
