@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<!--
+  Minimal Mistakes Jekyll Theme 4.27.3 by Michael Rose
+  Copyright 2013-2025 Michael Rose - mademistakes.com | @mmistakes
+  Free for personal and commercial use under the MIT license
+  https://github.com/mmistakes/minimal-mistakes/blob/master/LICENSE
+--><html lang="en" class="no-js">
+  <head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing - Felipe Nipo</title>
+<meta name="description" content="The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.">
+
+
+  <meta name="author" content="Felipe Nipo">
+  
+  <meta property="article:author" content="Felipe Nipo">
+  
+
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en">
+<meta property="og:site_name" content="Felipe Nipo">
+<meta property="og:title" content="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing">
+<meta property="og:url" content="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">
+
+
+  <meta property="og:description" content="The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.">
+
+
+
+  <meta property="og:image" content="https://fnipo.github.io/assets/duo.jpg">
+
+
+
+
+
+  <meta property="article:published_time" content="2022-06-17T00:00:00+00:00">
+
+
+
+
+
+
+<link rel="canonical" href="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+  
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css"></noscript>
+
+
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet">
+  <script>MathJax={"tex":{"inlineMath":[["$","$"],["\\(","\\)"]],"displayMath":[["$$","$$"],["\\[","\\]"]]},"svg":{"fontCache":"global"}}</script><script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script><script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+
+  <body class="layout--single wide" dir="ltr">
+    <nav class="skip-links">
+  <ul>
+    <li><a href="#site-nav" class="screen-reader-shortcut">Skip to primary navigation</a></li>
+    <li><a href="#main" class="screen-reader-shortcut">Skip to content</a></li>
+    <li><a href="#footer" class="screen-reader-shortcut">Skip to footer</a></li>
+  </ul>
+</nav>
+
+    
+
+<div class="masthead">
+  <div class="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+        <a class="site-title" href="/">
+          Felipe Nipo
+          
+        </a>
+        <ul class="visible-links">
+          <!-- DISABLED MASTHEAD -->
+          <!--<li class="masthead__menu-item">
+              <a
+                href="https://mmistakes.github.io/minimal-mistakes/docs/quick-start-guide/"
+                
+                
+              >Quick-Start Guide</a>
+            </li>-->
+        </ul>
+        
+        <button class="search__toggle" type="button">
+          <span class="visually-hidden">Toggle search</span>
+          <i class="fas fa-search"></i>
+        </button>
+        
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+    <div class="initial-content">
+      
+
+
+
+
+
+<div id="main" role="main">
+  
+  <div class="sidebar sticky">
+  
+
+
+<div itemscope itemtype="https://schema.org/Person" class="h-card">
+
+  
+    <div class="author__avatar">
+      <a href="https://fnipo.github.io/">
+        <img src="/assets/bio-photo.jpg" alt="Felipe Nipo" itemprop="image" class="u-photo">
+      </a>
+    </div>
+  
+
+  <div class="author__content">
+    <h3 class="author__name p-name" itemprop="name">
+      <a class="u-url" rel="me" href="https://fnipo.github.io/" itemprop="url">Felipe Nipo</a>
+    </h3>
+    
+      <div class="author__bio p-note" itemprop="description">
+        <p>Software Engineer</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <button class="btn btn--inverse">Follow</button>
+    <ul class="author__urls social-icons">
+      
+        <li itemprop="homeLocation" itemscope itemtype="https://schema.org/Place">
+          <i class="fas fa-fw fa-map-marker-alt" aria-hidden="true"></i> <span itemprop="name" class="p-locality">Dublin, Ireland</span>
+        </li>
+      
+
+      
+        
+          
+            <li><a href="https://twitter.com/felipenipo" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-twitter-square" aria-hidden="true"></i><span class="label">Twitter</span></a></li>
+          
+        
+          
+            <li><a href="https://www.linkedin.com/in/felipenipo/" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-linkedin" aria-hidden="true"></i><span class="label">LinkedIn</span></a></li>
+          
+        
+          
+            <li><a href="https://github.com/fnipo" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-github" aria-hidden="true"></i><span class="label">GitHub</span></a></li>
+          
+        
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      <!--
+  <li>
+    <a href="http://link-to-whatever-social-network.com/user/" itemprop="sameAs" rel="nofollow noopener noreferrer me">
+      <i class="fas fa-fw" aria-hidden="true"></i> Custom Social Profile Link
+    </a>
+  </li>
+-->
+    </ul>
+  </div>
+</div>
+
+  
+  </div>
+
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <meta itemprop="headline" content="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing">
+    <meta itemprop="description" content="The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.">
+    <meta itemprop="datePublished" content="2022-06-17T00:00:00+00:00">
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">
+            <a href="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" itemprop="url">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing
+</a>
+          </h1>
+          
+
+  <p class="page__meta">
+    
+
+    
+
+    
+      
+      
+
+      <span class="page__meta-readtime">
+        <i class="far fa-clock" aria-hidden="true"></i>
+        
+          5 minute read
+        
+      </span>
+    
+  </p>
+
+
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <p>The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</p>
+
+<p>This is typically used on systems that can’t compromise availability with locking strategies such as <a href="https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html">Two Phase Commit</a>.</p>
+
+<p>As explained in the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html">Partial execution: At-most-once vs. At-least-once Deliveries</a> post, this presents consistency challenges in partial execution scenarios, particularly when involving non-queriable storage such as a message bus.
+Managing inconsistencies gets even more challenging as a workflow is extended to write to more storages: databases, messaging platforms, cache, elasticsearch, etc…</p>
+
+<p>A workflow may require stronger consistency that guarantees atomicity, which means a guarantee that either the two writes succeed or none of them do, so there is never a partial state.</p>
+
+<p>Another concern with dual-writes is that it reduces the overall availability of a workflow as it is tied to the availability of multiple infrastructure components:</p>
+
+<p>From <a href="https://aws.amazon.com/legal/service-level-agreements/">AWS SLAs</a>:</p>
+<ul>
+  <li>AWS messaging availability is 99.5% (1-day downtime a year)</li>
+  <li>AWS databases availability is 99.5% (1-day downtime a year)</li>
+</ul>
+
+<p>Following the formula for the compound probability of independent events occurring together:</p>
+
+<p>$ P (A \text{ and } B) = P(A) * P(B) $
+$ 0.995 * 0.995 = 0.990 $</p>
+
+<p>The overall workflow availability based on dual-writes is reduced to 99.0%, and downtime is amplified to 3-days a year.</p>
+
+<h1 id="change-data-capture-cdc">Change Data Capture (CDC)</h1>
+
+<p>CDC is a built-in feature in databases such as <a href="https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html">Cassandra</a> and <a href="https://docs.microsoft.com/en-us/azure/cosmos-db/sql/change-feed-processor">Cosmos DB</a> to allow subscription on data changes, i.e. the Observer pattern, with an at-least-once delivery guarantee.</p>
+
+<p>It allows the implementation of a service that reacts to data changes and do some operation, similar to what traditional Triggers provided but completely extracting logic from the database layer.</p>
+
+<p>Databases provide CDC in one of these two flavors:</p>
+<ul>
+  <li>Pull-based: Essentially a long and continuous query. Changes are handled in batches to counter polling latency and are ordered by the date and time they happened. It can capture inserts and updates but is limited when capturing deletes.</li>
+  <li>Push-based: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.</li>
+</ul>
+
+<blockquote>
+  <p>How could CDC help to avoid rollbacks on the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html#at-least-once-delivery">at-least-once scenario</a>?</p>
+</blockquote>
+
+<p>One could make a dedicated service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the <em>OrderCreated</em> message asynchronously.
+This design provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204344430a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c"></p>
+
+<p>This is an idea I explored in a previous work when refactoring a project, and while it is on the right track I realized this would be a bad idea.</p>
+
+<p>The main problem is that it takes away from the workflow the power of defining the message content, leading to:</p>
+<ul>
+  <li>Increased complexity because the message definition logic is now hidden on this intermediate service that produces the <em>OrderCreated</em> message</li>
+  <li>The job of the <em>OrderCreated</em> message producer is not easy, it is based on lots of inferences, mainly because it doesn’t have enough context to do its job except for what it reads from the database Order data model</li>
+  <li>The Order data model may become a mix of data and messaging models to facilitate the job of the <em>OrderCreator</em> producer. It tries to satisfy both needs but ultimately not fitting any</li>
+  <li>Strong coupling between the message model and the Order data model</li>
+</ul>
+
+<h1 id="the-outbox-pattern">The Outbox Pattern</h1>
+
+<p>A simpler approach based on CDC is by implementing an Outbox, to define clear boundaries between the data model and the message model.</p>
+
+<p>In the Outbox Pattern the database is used as a queue and leverages a <a href="https://microservices.io/patterns/data/transaction-log-tailing.html">Transaction Log Tailing</a> mechanism based on CDC to replicate data from the database queue to a messaging platform.</p>
+
+<p>The message model is defined on the <em>OrderCreatedOutbox</em> table on the database completely decoupled from the Order table model.</p>
+
+<p>A workflow can either do both data and message writing atomically in a database transaction, or if not using transactions at least be able to query the database to check if the message was populated and retry when needed.</p>
+
+<p>Also, the workflows have full control over defining and populating the message.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a6461746162617365206f7574626f785f7461626c65205b0a202020202a2a4f7264657243726561746564206f7574626f78207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f73657276696365202d2d3e206f7574626f785f7461626c65203a20496e73657274204f72646572437265617465640a6f7574626f785f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204368616e67652063617074757265640a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c"></p>
+
+<p>The outbox pattern guarantees the message is eventually produced to the messaging platform, and it increases the workflow availability by depending only on the database availability.</p>
+
+<h1 id="event-sourcing">Event Sourcing</h1>
+
+<blockquote>
+  <p>“Eventsourcing uses storage as a way of communication, it solves storage and messaging for you” <br>Vaugh Vernon, on <a href="https://www.goodreads.com/en/book/show/28602719-domain-driven-design-distilled">Domain-Driven Design Distilled</a> book</p>
+</blockquote>
+
+<p>On an event-sourced database, data is stored as if it were messages, there are no tables, instead, there are streams of events that mimic a queue of messages.</p>
+
+<p>When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by <a href="https://queue.acm.org/detail.cfm?id=3415014">Pat Helland’s paper</a> with the difference between <em>data that lives inside</em> and <em>data that lives outside</em>.</p>
+
+<p>Events are part of the <em>data that lives inside</em> (but also immutable) and part of the authoritative data source, while messages are part of the <em>data that lives outside</em> and are designed for communication across <a href="https://martinfowler.com/bliki/BoundedContext.html">Bounded Contexts</a>.</p>
+
+<p>Unfortunately, the <em>Event</em> term is overloaded and used in both situations, messages are even called <em>integration events</em> in the DDD world,
+<a href="https://twitter.com/martinfowler">Martin Fowler</a> has a nice presentation on the many meanings of the <em>Event</em> term:</p>
+
+<p><iframe id="media-STKCRSUsyP0" class="media" src="https://www.youtube.com/embed/STKCRSUsyP0?width=400&height=250" title="" width="400" height="250" style="max-width: 600px;outline: none" allow="encrypted-media; picture-in-picture" frameborder="0" allowfullscreen></iframe></p>
+
+<p>An event is a kind of data that carries context to communicate what has happened to an aggregate.
+And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a>.
+With an event providing context to the message producer, what is outsourced to this service is mostly the decision of what events should be published to the outside world and the mechanics of using the messaging platform.</p>
+
+<p>However, the same data model concerns pointed out in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a> also apply here, and it shouldn’t fall into the trap of leaking the message model to the event model,
+the publishing service should perform stream-table join operations when needed to enrich the message, gathering related data that is not directly present in the event.</p>
+
+<p>The act of publishing a stream of internal events to the <em>data that live outside</em> is also called <em>Projection</em>, and in recent work, I used the <a href="https://github.com/jet/propulsion">Propulsion</a> library on .NET to implement a Projection.
+Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.</p>
+
+
+        
+      </section>
+
+      <footer class="page__meta">
+        
+        
+
+
+        
+
+  <p class="page__date"><strong><i class="fas fa-fw fa-calendar-alt" aria-hidden="true"></i> Updated:</strong> <time class="dt-published" datetime="2022-06-17T00:00:00+00:00">June 17, 2022</time></p>
+
+      </footer>
+
+      <section class="page__share">
+  <h4 class="page__share-title">Share on</h4>
+
+  <a href="https://x.com/intent/tweet?text=Solving+Dual-writes%3A+Change+Data+Capture%2C+The+Outbox+Pattern%2C+and+Event+Sourcing%20https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2022%2F06%2F17%2Fsolving-dual-writes-with-cdc-and-the-outbox-pattern.html" class="btn btn--x" aria-label="Share on X" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on X">
+    <i class="fab fa-fw fa-x-twitter" aria-hidden="true"></i><span> X</span>
+  </a>
+
+  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2022%2F06%2F17%2Fsolving-dual-writes-with-cdc-and-the-outbox-pattern.html" class="btn btn--facebook" aria-label="Share on Facebook" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on Facebook">
+    <i class="fab fa-fw fa-facebook" aria-hidden="true"></i><span> Facebook</span>
+  </a>
+
+  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" class="btn btn--linkedin" aria-label="Share on LinkedIn" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on LinkedIn">
+    <i class="fab fa-fw fa-linkedin" aria-hidden="true"></i><span> LinkedIn</span>
+  </a>
+
+  <a href="https://bsky.app/intent/compose?text=Solving+Dual-writes%3A+Change+Data+Capture%2C+The+Outbox+Pattern%2C+and+Event+Sourcing%20https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2022%2F06%2F17%2Fsolving-dual-writes-with-cdc-and-the-outbox-pattern.html" class="btn btn--bluesky" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on Bluesky">
+    <i class="fab fa-fw fa-bluesky" aria-hidden="true"></i><span> Bluesky</span>
+  </a>
+</section>
+
+
+      
+  <nav class="pagination">
+    
+      <a href="/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html" class="pagination--pager" title="Partial execution: At-most-once vs. At-least-once Deliveries">Previous</a>
+    
+    
+      <a href="/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html" class="pagination--pager" title="Merging Message Types in a Kafka Topic">Next</a>
+    
+  </nav>
+
+
+    </div>
+
+    
+  </article>
+
+  
+  
+</div>
+
+      
+    </div>
+
+    
+      <div class="search-content">
+        <div class="search-content__inner-wrap">
+<form class="search-content__form" onkeydown="return event.key != 'Enter';" role="search">
+    <label class="sr-only" for="search">
+      Enter your search term...
+    </label>
+    <input type="search" id="search" class="search-input" tabindex="-1" placeholder="Enter your search term...">
+  </form>
+  <div id="results" class="results"></div>
+</div>
+
+      </div>
+    
+
+    <div id="footer" class="page__footer">
+      <footer>
+        <!-- start custom footer snippets -->
+
+<!-- end custom footer snippets -->
+        
+
+
+<div class="page__footer-copyright">© 2025 <a href="https://fnipo.github.io">Felipe Nipo</a>. Powered by <a href="https://jekyllrb.com" rel="nofollow">Jekyll</a> &amp; <a href="https://mademistakes.com/work/jekyll-themes/minimal-mistakes/" rel="nofollow">Minimal Mistakes</a>.</div>
+
+      </footer>
+    </div>
+
+    
+  <script src="/assets/js/main.min.js"></script>
+
+
+
+
+<script src="/assets/js/lunr/lunr.min.js"></script>
+<script src="/assets/js/lunr/lunr-store.js"></script>
+<script src="/assets/js/lunr/lunr-en.js"></script>
+
+
+
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-P9LR4DJVN7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-P9LR4DJVN7', { 'anonymize_ip': false});
+</script>
+
+
+
+
+
+
+
+
+  </body>
+</html>
