@@ -1,5 +1,5 @@
 ---
-title:  "Semantic Versioning is an Estimate"
+title:  "Semantic Versioning is Just an Estimate"
 date:   2025-07-01 00:00:00 +0000
 categories: software-engineering
 tags: software-engineering
