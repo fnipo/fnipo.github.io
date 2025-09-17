@@ -458,17 +458,17 @@ Idempotent consumers can consume from both topics simultaneously, using an idemp
 
 Old consumers would still process messages from the old topic. And in the meanwhile, the new consumers will be already consuming from the new source.
 
+This approach allows for dark launches to give confidence in the transition. For instance, the new consumer may run in parallel with feature flags to disable side effects, just logging outputs to compare side-by-side old vs. new flows.
+
 Lastly, the old topic's consumers can be removed as part of a housekeeping effort.
 The steps for this typically looks like this:
 1. Phase out the old topic's producer so no new messages are added to the old topic.
 2. Wait until the old topic dries out and all messages are consumed.
 3. Remove the old topic's consumers.
 
-This approach allows for dark launches to give confidence in the transition. Where the new consumer runs in parallel without side effects, logging outputs to compare side-by-side old vs. new flows.
-
 ### When Consumers Aren't Idempotent
 
-Without idempotency, consumers must perform a hard switch. The challenge is ensuring the new consumer group starts processing from the equivalent offset from the equivalent offset of the old group, without reprocessing or skipping messages.
+Without idempotency, consumers must perform a hard switch. The challenge is ensuring the new consumer group starts processing from the equivalent offset of the old group, without reprocessing or skipping messages.
 
 Read more in the Hard Switches post (coming soon...).
 
@@ -476,7 +476,7 @@ Read more in the Hard Switches post (coming soon...).
 
 Rollbacks are as complex as migrations themselves.
 
-For example, if a [Scenario 2](https://felipenipo.com/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html#scenario-2-breaking-changes) migration involves:
+For example, if a [Scenario 3](https://felipenipo.com/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html#scenario-3-a-new-topic-has-to-be-introduced) migration involves:
 1. Switching producers to a new topic
 2. Switching consumers to the new topic
 
@@ -488,8 +488,8 @@ Delivery guarantees also apply in reverse. Before rolling consumers back, you ma
 
 # Conclusion
 
-Idempotency is the single most powerful tool for simplifying migrations.
+Idempotency is a powerful tool for simplifying migrations, particularly for high-available system and when exactly-once guarantees are desirable.
 
-It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a careful choreography of producer and consumer switches.
+It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a risky choreography of producer and consumer switches, usually leading to downtimes.
 
-If you’re designing a system today, bake idempotency in from the start and your future self will thank you when migrations inevitably arrive.
+If you’re designing a high-available system today, bake idempotency in from the start and your future self will thank you when migrations inevitably arrive.
