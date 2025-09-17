@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="utf-8"?><feed xmlns="http://www.w3.org/2005/Atom" ><generator uri="https://jekyllrb.com/" version="4.3.4">Jekyll</generator><link href="https://fnipo.github.io/feed.xml" rel="self" type="application/atom+xml" /><link href="https://fnipo.github.io/" rel="alternate" type="text/html" /><updated>2025-09-17T03:37:11+00:00</updated><id>https://fnipo.github.io/feed.xml</id><title type="html">Felipe Nipo</title><subtitle>12+ years experience as Software Engineer with a post-graduate degree, experience in backend development with exposure to distributed systems, event sourcing, and event-driven architectures.</subtitle><author><name>Felipe Nipo</name></author><entry><title type="html">Consumers/Producers Migrations Strategies</title><link href="https://fnipo.github.io/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html" rel="alternate" type="text/html" title="Consumers/Producers Migrations Strategies" /><published>2025-09-16T00:00:00+00:00</published><updated>2025-09-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2025/09/16/consumers-producers-migrations-strategies</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html"><![CDATA[<h1 id="introduction">Introduction</h1>
+<p>Migrating systems brings an entirely different set of challenges: doing it without downtime, keeping data consistency, and ensuring a seamless experience for customers in production.</p>
+
+<p>This is often where the value of solid engineering practices becomes visible. Reliable testing builds confidence in avoiding regressions, while idempotency can be a great facilitator for a smooth migration.</p>
+
+<p>In this article, I’ll cover common messaging-related migration scenarios that involve Kafka consumers and producers, along with their caveats.</p>
+
+<h1 id="scenario-1-the-happy-path">Scenario 1: The Happy Path</h1>
+<p>The happy path is when a contract changes in a backward-compatible way. In this case, you don’t need to declare a new version of the contract, and the same topic can continue to be used.</p>
+
+<p>Because the change is backward-compatible, existing consumers won’t break when handling the new contract, and they can be upgraded at their own pace.</p>
+
+<p>Common backward-compatible changes include:</p>
+<ul>
+  <li>Adding a new field: outdated consumers simply ignore it.</li>
+  <li>Adding new values to an enum: outdated consumers ignore them or fall back to defaults.</li>
+  <li>Turning optional fields mandatory: outdated consumers are already coded to handle the field whether it has a value or is null.</li>
+</ul>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d204e6f74654261636b67726f756e64436f6c6f7220436f726e73696c6b0a736b696e706172616d204e6f7465426f72646572436f6c6f7220236163616361630a736b696e706172616d204e6f7465466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a736b696e706172616d206c6567656e64466f6e7453697a6520370a6c65667420746f20726967687420646972656374696f6e0a0a6c6567656e6420746f700af09f9fa6204e657720436f6d706f6e656e740af09f9fa52052656d6f76656420436f6d706f6e656e740a656e646c6567656e640a0a72656374616e676c65202246696e616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f64205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f64205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f64205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f64202020202d2d3e2020202020746f7069635f6420202020202020202020203a202020202076310a20202020746f7069635f64202020202020202d2d3e2020202020636f6e73756d65725f76325f6420202020203a20202020207631202020200a7d0a0a72656374616e676c65202250686173652032202d20436f6e73756d65722069732055706772616465642220236c696e653a47726179207b202020200a2020202072656374616e676c652070726f64756365725f63205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f63205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f6320236c696e653a626c7565205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f6320236c696e652e6461736865643b6c696e653a726564205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f63202020202d2d3e202020202020202020202020746f7069635f632020202020202020202020203a202020202076310a20202020746f7069635f63202020202020202e5b237265645d2d3e202020202020636f6e73756d65725f76315f632020202020203a202020202076310a20202020746f7069635f63202020202020202d5b23626c75655d2d3e2020202020636f6e73756d65725f76325f632020202020203a202020202076310a7d0a0a72656374616e676c65202250686173652031202d20436f6e747261637420697320557064617465642220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f62205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f62205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f62205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6220202020202020202d5b23626c75655d2d3e20202020746f7069635f622020202020202020202020203a2020202020202076310a20202020746f7069635f6220202020202020202020202d5b23626c75655d2d3e20202020636f6e73756d65725f76315f622020202020203a2020202020202076310a7d0a0a72656374616e676c652022496e697469616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f61205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f61205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f61205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6120202020202020202d2d3e20202020202020746f7069635f612020202020202020203a2020202020202076310a20202020746f7069635f6120202020202020202020202d2d3e20202020202020636f6e73756d65725f76315f612020203a2020202020202076310a7d0a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>In these cases, consumers aren’t required to upgrade immediately. For example, a service might not care about the new field and can continue ignoring it.</p>
+
+<p>When consumers do upgrade, reusing the same consumer group ID ensures they resume exactly where the previous consumer left off. Kafka’s consumer group metadata tracks the last consumed offset, preventing both reprocessing and message loss.</p>
+
+<h1 id="scenario-2-breaking-changes">Scenario 2: Breaking Changes</h1>
+<p>Sometimes breaking changes to a contract are unavoidable. In this scenario, a new version of the contract must be introduced.</p>
+
+<p>Typical breaking changes include:</p>
+<ul>
+  <li>Deleting a mandatory field: outdated consumers fail to deserialize.</li>
+  <li>Renaming a mandatory field: effectively the same as deleting the old one and adding a new one.</li>
+  <li>Changing field types: outdated consumers deserialize incorrectly.</li>
+</ul>
+
+<h3 id="producing-both-versions">Producing Both Versions</h3>
+
+<p>A common approach is to apply the <a href="https://martinfowler.com/bliki/ParallelChange.html">Parallel Change Pattern</a>, making producers emit both the old and new contracts to the same topic during a migration period.</p>
+
+<p>For example, a producer may publish both versions of a message, <code class="language-plaintext highlighter-rouge">OrderCreatedV1</code> and <code class="language-plaintext highlighter-rouge">OrderCreatedV2</code>, to an <code class="language-plaintext highlighter-rouge">order-created</code> topic. Old consumers continue processing <code class="language-plaintext highlighter-rouge">OrderCreatedV1</code> messages while consumers are incrementally upgraded to handle <code class="language-plaintext highlighter-rouge">OrderCreatedV2</code> messages.</p>
+
+<p>Eventually the producer switches to publishing only <code class="language-plaintext highlighter-rouge">OrderCreatedV2</code> messages, once all consumers are upgraded.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d204e6f74654261636b67726f756e64436f6c6f7220436f726e73696c6b0a736b696e706172616d204e6f7465426f72646572436f6c6f7220236163616361630a736b696e706172616d204e6f7465466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a736b696e706172616d206c6567656e64466f6e7453697a6520370a6c65667420746f20726967687420646972656374696f6e0a0a6c6567656e6420746f700af09f9fa6204e657720436f6d706f6e656e740af09f9fa52052656d6f76656420436f6d706f6e656e740a656e646c6567656e640a0a72656374616e676c65202246696e616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f65205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f65205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f65205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f65202020202d2d3e2020202020746f7069635f6520202020202020202020203a202020202076320a20202020746f7069635f65202020202020202d2d3e2020202020636f6e73756d65725f76325f6520202020203a20202020207632202020200a7d0a0a72656374616e676c65202250686173652033202d20486f7573656b656570696e672220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f64205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f64205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f64205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6420202020202020202d2d3e2020202020202020202020746f7069635f642020202020202020202020203a2020202020202076320a2020202070726f64756365725f6420202020202020202e5b237265645d2d3e2020202020746f7069635f642020202020202020202020203a2020202020202076310a20202020746f7069635f6420202020202020202020202d2d3e2020202020202020202020636f6e73756d65725f76325f642020202020203a2020202020202076320a20202020746f7069635f6420202020202020202020202e5b237265645d2d3e2020202020636f6e73756d65725f76325f642020202020203a2020202020202076310a202020200a7d0a0a72656374616e676c65202250686173652032202d20436f6e73756d65722069732055706772616465642220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f63205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f63205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f6320236c696e653a626c7565205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f6320236c696e652e6461736865643b6c696e653a726564205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6320202020202020202d2d3e2020202020202020202020746f7069635f632020202020202020202020203a2020202020202076320a2020202070726f64756365725f6320202020202020202d2d3e2020202020202020202020746f7069635f632020202020202020202020203a2020202020202076310a20202020746f7069635f6320202020202020202020202e5b237265645d2d3e2020202020636f6e73756d65725f76315f632020202020203a2020202020202076320a20202020746f7069635f6320202020202020202020202e5b237265645d2d3e2020202020636f6e73756d65725f76315f632020202020203a2020202020202076310a20202020746f7069635f6320202020202020202020202d5b23626c75655d2d3e20202020636f6e73756d65725f76325f632020202020203a2020202020202076320a20202020746f7069635f6320202020202020202020202d5b23626c75655d2d3e20202020636f6e73756d65725f76325f632020202020203a2020202020202076310a7d0a0a72656374616e676c65202250686173652031202d20436f6e747261637420763220697320496e74726f64756365642220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f62205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f62205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f62205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6220202020202020202d5b23626c75655d2d3e20202020746f7069635f622020202020202020202020203a2020202020202076320a2020202070726f64756365725f6220202020202020202d2d3e2020202020202020202020746f7069635f622020202020202020202020203a2020202020202076310a20202020746f7069635f6220202020202020202020202d5b23626c75655d2d3e20202020636f6e73756d65725f76315f622020202020203a2020202020202076320a20202020746f7069635f6220202020202020202020202d2d3e2020202020202020202020636f6e73756d65725f76315f622020202020203a2020202020202076310a7d0a0a72656374616e676c652022496e697469616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f61205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f61205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f61205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6120202020202020202d2d3e20202020202020746f7069635f612020202020202020203a2020202020202076310a20202020746f7069635f6120202020202020202020202d2d3e20202020202020636f6e73756d65725f76315f612020203a2020202020202076310a7d0a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>When the new consumer reuses the same consumer group, old and new consumers operate as <a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/competing-consumers">Competing Consumers</a>.
+For each pair of <code class="language-plaintext highlighter-rouge">v1</code> and <code class="language-plaintext highlighter-rouge">v2</code> messages, both messages share the same partition key, which Kafka ensures they are placed in the same partition and processed by the same consumer instance.</p>
+
+<p>This guarantees that only the supported contract version of the assigned consumer instance is processed, so idempotency is not required for deduplication.</p>
+
+<h3 id="️-caveat-replaying">⚠️ Caveat: Replaying</h3>
+
+<p>Replaying such a topic in the future requires consumers to be able to handle all historic contract versions existing within the topic. And to do so idempotently, to avoid redundant processing of different versions of the same message.</p>
+
+<h3 id="️-caveat-dual-writes">⚠️ Caveat: Dual Writes</h3>
+
+<p>Read more in the <a href="https://felipenipo.com/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">Dual Writes</a> post.</p>
+
+<p>Consider this scenario:</p>
+<ol>
+  <li>One version may be produced successfully while the other fails.</li>
+  <li>Retrying it can cause the previous successfully produced message version to be produced again to the topic.</li>
+  <li>Exactly-once guarantees may be compromised unless consumers are idempotent.</li>
+</ol>
+
+<p>When dual writes become an issue, the alternative is a Producer Hard-switch strategy.</p>
+
+<h3 id="extra-challenge-introducing-a-new-consumer-group">Extra Challenge: Introducing a New Consumer Group</h3>
+
+<p>If a new consumer group is introduced, the system behaves as <a href="https://learn.microsoft.com/en-us/azure/architecture/patterns/publisher-subscriber">Publisher-Subscriber</a>.
+In this mode, non-idempotent consumers will redundantly process both versions of messages. If exactly-once guarantees are required, consider either a Consumer Hard-switch or a Producer Hard-switch.</p>
+
+<p>Also be mindful of deployment strategies like <a href="https://kubernetes.io/docs/tutorials/kubernetes-basics/update/update-intro">Kubernetes Rolling Updates</a>, which can temporarily run old and new consumers in parallel, reproducing this scenario.</p>
+
+<h1 id="scenario-3-a-new-topic-has-to-be-introduced">Scenario 3: A New Topic Has to Be Introduced</h1>
+
+<p>Sometimes it isn’t possible to keep multiple contract versions in the same topic, and a new topic must be created, bringing versioning to topics.</p>
+
+<p>This is necessary when:</p>
+<ul>
+  <li>The Kafka Schema Registry subject naming strategy disallows multiple contracts per topic.</li>
+  <li>Consumers are external, unclear, or not under your control (e.g., third-party or customer integrations), making it hard to ensure they can handle multiple contract versions.</li>
+  <li>The new schema represents a fundamentally different model, and the old topic is no longer suitable.</li>
+  <li>The partition key changes. While its technically possible to change a topic’s partition key, it will lead to messages being processed out-of-order, as previously produced messages won’t be re-partitioned. A new topic is usually recommended.</li>
+  <li>The partition count changes. Again, this is technically possible, but unless your system can tolerate out-of-order messages, a new topic should be created.</li>
+</ul>
+
+<p>In these cases, versioning applies to topics themselves (e.g., <code class="language-plaintext highlighter-rouge">order-created</code> vs <code class="language-plaintext highlighter-rouge">order-created-v2</code>), and upgrading Consumers require a multi-topic migration plan.</p>
+
+<h3 id="when-consumers-are-idempotent">When Consumers are Idempotent</h3>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d204e6f74654261636b67726f756e64436f6c6f7220436f726e73696c6b0a736b696e706172616d204e6f7465426f72646572436f6c6f7220236163616361630a736b696e706172616d204e6f7465466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a736b696e706172616d206c6567656e64466f6e7453697a6520370a6c65667420746f20726967687420646972656374696f6e0a0a6c6567656e6420746f700af09f9fa6204e657720436f6d706f6e656e740af09f9fa52052656d6f76656420436f6d706f6e656e740a656e646c6567656e640a0a72656374616e676c65202246696e616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f65205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f65205b0a20202020202020202a2a546f7069632076322a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f65205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a204132290a202020205d0a0a2020202070726f64756365725f65202020202d2d3e2020202020746f7069635f6520202020202020202020203a202020202076320a20202020746f7069635f65202020202020202d2d3e2020202020636f6e73756d65725f76325f6520202020203a20202020207632202020200a7d0a0a72656374616e676c65202250686173652033202d20486f7573656b656570696e672220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f64205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f76325f64205b0a20202020202020202a2a546f7069632076322a2a0a202020205d0a0a20202020717565756520746f7069635f76315f6420236c696e652e6461736865643b6c696e653a726564205b0a20202020202020202a2a546f7069632076312a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f64205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a204132290a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f6420236c696e652e6461736865643b6c696e653a726564205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6420202020202020202d2d3e2020202020202020202020746f7069635f76325f642020202020202020203a2020202020202076320a2020202070726f64756365725f6420202020202020202e5b237265645d2d3e2020202020746f7069635f76315f642020202020202020203a2020202020202076310a20202020746f7069635f76325f6420202020202020202d2d3e2020202020202020202020636f6e73756d65725f76325f642020202020203a2020202020202076320a20202020746f7069635f76315f6420202020202020202e5b237265645d2d3e2020202020636f6e73756d65725f76315f642020202020203a2020202020202076310a7d0a0a72656374616e676c65202250686173652032202d20436f6e73756d65722069732055706772616465642220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f63205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f76325f63205b0a20202020202020202a2a546f7069632076322a2a0a202020205d0a0a20202020717565756520746f7069635f76315f63205b0a20202020202020202a2a546f7069632076312a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76325f6320236c696e653a626c7565205b0a20202020202020202a2a436f6e73756d65722076322a2a0a20202020202020202867726f75703a204132290a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f63205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6320202020202020202d2d3e2020202020202020202020746f7069635f76325f632020202020202020203a2020202020202076320a2020202070726f64756365725f6320202020202020202d2d3e2020202020202020202020746f7069635f76315f632020202020202020203a2020202020202076310a20202020746f7069635f76315f6320202020202020202d2d3e2020202020202020202020636f6e73756d65725f76315f632020202020203a2020202020202076310a20202020746f7069635f76325f6320202020202020202d5b23626c75655d2d3e20202020636f6e73756d65725f76325f632020202020203a2020202020202076320a7d0a0a72656374616e676c65202250686173652031202d20546f70696320763220697320496e74726f64756365642220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f62205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f76325f6220236c696e653a626c7565205b0a20202020202020202a2a546f7069632076322a2a0a202020205d0a0a20202020717565756520746f7069635f76315f62205b0a20202020202020202a2a546f7069632076312a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f62205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6220202020202020202d5b23626c75655d2d3e20202020746f7069635f76325f622020202020202020202020203a2020202020202076320a2020202070726f64756365725f6220202020202020202d2d3e2020202020202020202020746f7069635f76315f622020202020202020202020203a2020202020202076310a20202020746f7069635f76315f6220202020202020202d2d3e2020202020202020202020636f6e73756d65725f76315f622020202020202020203a2020202020202076310a7d0a0a72656374616e676c652022496e697469616c2053746174652220236c696e653a47726179207b0a2020202072656374616e676c652070726f64756365725f61205b0a20202020202020202a2a50726f64756365722a2a0a202020205d0a0a20202020717565756520746f7069635f61205b0a20202020202020202a2a546f7069632a2a0a202020205d0a0a2020202072656374616e676c6520636f6e73756d65725f76315f61205b0a20202020202020202a2a436f6e73756d65722076312a2a0a20202020202020202867726f75703a2041290a202020205d0a0a2020202070726f64756365725f6120202020202020202d2d3e20202020202020746f7069635f612020202020202020203a2020202020202076310a20202020746f7069635f6120202020202020202020202d2d3e20202020202020636f6e73756d65725f76315f612020203a2020202020202076310a7d0a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>Idempotent consumers can consume from both topics simultaneously, using an idempotency key to deduplicate messages and enable a gradual migration.</p>
+
+<p>Old consumers would still process messages from the old topic. And in the meanwhile, the new consumers will be already consuming from the new source.</p>
+
+<p>This approach allows for dark launches to give confidence in the transition. For instance, the new consumer may run in parallel with feature flags to disable side effects, just logging outputs to compare side-by-side old vs. new flows.</p>
+
+<p>Lastly, the old topic’s consumers can be removed as part of a housekeeping effort.
+The steps for this typically looks like this:</p>
+<ol>
+  <li>Phase out the old topic’s producer so no new messages are added to the old topic.</li>
+  <li>Wait until the old topic dries out and all messages are consumed.</li>
+  <li>Remove the old topic’s consumers.</li>
+</ol>
+
+<h3 id="when-consumers-arent-idempotent">When Consumers Aren’t Idempotent</h3>
+
+<p>Without idempotency, consumers must perform a hard switch. The challenge is ensuring the new consumer group starts processing from the equivalent offset of the old group, without reprocessing or skipping messages.</p>
+
+<p>Read more in the Hard Switches post (coming soon…).</p>
+
+<h1 id="rollbacks">Rollbacks</h1>
+
+<p>Rollbacks are as complex as migrations themselves.</p>
+
+<p>For example, if a <a href="https://felipenipo.com/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html#scenario-3-a-new-topic-has-to-be-introduced">Scenario 3</a> migration involves:</p>
+<ol>
+  <li>Switching producers to a new topic</li>
+  <li>Switching consumers to the new topic</li>
+</ol>
+
+<p>Then a rollback requires the reverse:</p>
+<ol>
+  <li>Switching producers back to the old topic</li>
+  <li>Switching consumers back to the old topic</li>
+</ol>
+
+<p>Delivery guarantees also apply in reverse. Before rolling consumers back, you may need to wait until the new topic is drained and all messages produced to it are processed, ensuring no loss.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+
+<p>Idempotency is a powerful tool for simplifying migrations, particularly for high-available systems.</p>
+
+<p>It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a risky choreography of producer and consumer switches, usually leading to downtimes.</p>
+
+<p>If you’re designing a high-available system today, bake idempotency in from the start and your future self will thank you when migrations inevitably arrive.</p>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[Introduction Migrating systems brings an entirely different set of challenges: doing it without downtime, keeping data consistency, and ensuring a seamless experience for customers in production.]]></summary></entry><entry><title type="html">Semantic Versioning is Just an Estimate</title><link href="https://fnipo.github.io/software-engineering/2025/07/01/semantic-versioning-is-just-an-estimate.html" rel="alternate" type="text/html" title="Semantic Versioning is Just an Estimate" /><published>2025-07-01T00:00:00+00:00</published><updated>2025-07-01T00:00:00+00:00</updated><id>https://fnipo.github.io/software-engineering/2025/07/01/semantic-versioning-is-just-an-estimate</id><content type="html" xml:base="https://fnipo.github.io/software-engineering/2025/07/01/semantic-versioning-is-just-an-estimate.html"><![CDATA[<p>Semantic Versioning became the industry standard for managing releases, following the pattern <code class="language-plaintext highlighter-rouge">MAJOR.MINOR.PATCH</code>:</p>
+<ul>
+  <li>Patch is for safe bug fixes</li>
+  <li>Minor is for safe backward-compatible changes</li>
+  <li>Major increases are for breaking changes or significant milestones</li>
+</ul>
+
+<p>It is helpful when weighing the risks of upgrading dependencies that are outside your control, whether from another team or from external.</p>
+
+<p>SemVer also serves to better estimate technical debt. The further you drift apart from the latest major versions, the more likely you are to be exposed to bugs, security vulnerabilities, and missing features.</p>
+
+<h3 id="over-promissing">Over-Promissing</h3>
+
+<p>However, at scale this promise starts to unravel.</p>
+
+<p>As Google’s Software Engineering book put it:</p>
+<blockquote>
+  <p>“SemVer’s numbers are provided by the maintainer as an estimate of how compatible the new version is, and we end up building all of our versioning logic on top of this shaky foundation, treating estimates as absolute”.</p>
+</blockquote>
+
+<p>When a maintainer pushes a new release and chooses this is a minor upgrade from <code class="language-plaintext highlighter-rouge">1.1.0</code> to <code class="language-plaintext highlighter-rouge">1.2.0</code>, is it guaranteed to be a safe and easy upgrade?</p>
+
+<p><strong>No…</strong></p>
+
+<p>Beyond the observable universe of things that a maintainer would consider when weighing how to bump the version, such as checking for breaking changes on contracts, there are subtle behavioral changes that may sneak in during “simple” changes:</p>
+<ul>
+  <li>A change that affects performance, even in milliseconds, might impact time-sensitive consumers</li>
+  <li>Changing the order in which results are returned might impact consumers unexpectedly relying on ordering</li>
+</ul>
+
+<p>SemVer, like any estimation, is about <strong>perceived</strong> risks.</p>
+
+<h3 id="over-constraining">Over-Constraining</h3>
+<p>Another face of the same problem, and a more obvious one, is that while a major bump signals a breaking change, it isn’t guaranteed to break applications adopting it. The application might not be using the structure or behavior that changed.</p>
+
+<h3 id="the-decision-process">The Decision Process</h3>
+<p>In the real world, the decision whether a change warrants a major version bump or a minor one is subjective.
+It might happen as an engineer’s judgment call, or in a group meeting, collecting everyone’s input to weigh the risks involved.</p>
+
+<p>The discussion is often around:</p>
+<ul>
+  <li>Who consumes this artifact? A critical system depending on it raises the stakes.</li>
+  <li>How is it used? It might change a recently added parameter that no one is using yet.</li>
+</ul>
+
+<p>For instance, inside an organization, teams may decide not to bump a major version when removing dead code, even when it’s a breaking change, given that it’s proven no one relies on it, to avoid unnecessary disruption.</p>
+
+<p>Ultimately, it’s always a risk-based decision.</p>
+
+<h1 id="hyrums-law">Hyrum’s Law</h1>
+<blockquote>
+  <p>“With a sufficient number of users, every observable behavior of your system will be depended upon by someone.”.</p>
+</blockquote>
+
+<p>In real terms, at scale, you inevitably lose sight of all the ways your system is used. Any change will alter some hidden edge and break a consumer who was unexpectedly relying on that.</p>
+
+<p><img src="https://imgs.xkcd.com/comics/workflow.png" alt="" class="align-center" /></p>
+
+<p>Hyrum’s Law was my main takeaway from reading Google’s Software Engineering book.
+It’s a summary of hard-earned lessons only possible from operating systems on such a large scale.</p>
+
+<p>(actually, I hope I’ve made a small contribution for the next revision!)</p>
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr"><a href="https://t.co/1gUSxJPbWv">https://t.co/1gUSxJPbWv</a><br /><br />Got to hear about <a href="https://twitter.com/hyrumwright?ref_src=twsrc%5Etfw">@hyrumwright</a> Hyrum&#39;s law the other day while reading the amazing Software Engineering at Google book, and no idea why this equally amazing XKCD is not in the book.<br /><br />It&#39;s a fact of life: &quot;Everything that can be gamed will be gamed&quot;</p>&mdash; Felipe Nipo(@felipenipo) <a href="https://twitter.com/felipenipo/status/1536791609022590977?ref_src=twsrc%5Etfw">June 14, 2022</a></blockquote>
+<script async="" src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
+
+<p>About the idea that an upgrade from 1.1.0 to 1.2.0 would be safe and easy as SemVer suggests… Hyrum’s Law tells us otherwise.</p>
+
+<p>Treat every update as risky, weigh the risk in your context, and depend on testing for a real compatibility guarantee.</p>
+
+<h1 id="automatic-patch-upgrades">Automatic Patch Upgrades</h1>
+<p>A typical scenario when referencing a dependency is to lock Major and Minor versions while floating the Patch, e.g. <code class="language-plaintext highlighter-rouge">3.4.*</code>. This is motivated by the desire to receive bug and security fixes quickly, while still protecting against riskier changes.</p>
+
+<p>When systems automatically pull in every latest patch version, they’re effectively outsourcing their risk assessment to the dependency maintainers.</p>
+
+<p>It’s particularly risky with public artifacts. Don’t be surprised to find out that, across open-source and vendors, the maintainers are often resource-constrained, operating with tight deadlines and limited testing.</p>
+
+<h1 id="a-real-world-incident">A Real-World Incident</h1>
+<p>I recently discovered a critical incident affecting Azure Cosmos DB users based on Docker, which began following a Patch release.</p>
+
+<blockquote>
+  <p><a href="https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302">https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302</a>.</p>
+</blockquote>
+
+<p>Here is what happened:</p>
+<ul>
+  <li>In July 2025, Azure Cosmos DB users running on Docker began experiencing intermittent connection failures after the <code class="language-plaintext highlighter-rouge">.NET 8.0.18</code> Patch release, which triggered an update on the corresponding <code class="language-plaintext highlighter-rouge">aspnet:8.0-alpine</code> Docker image to support the new .NET runtime version.</li>
+  <li>In a .NET application, it’s possible to enable automatic Patch upgrades by enabling the property <code class="language-plaintext highlighter-rouge">TargetLatestRuntimePatch=true</code>.
+With this flag on, any .NET runtime patch release is automatically pulled in, including its corresponding Docker image.</li>
+  <li>In a Dockerfile, the image is typically specified based on a Docker floating tag, such as <code class="language-plaintext highlighter-rouge">aspnet:8.0-alpine</code>. Microsoft manages these floating tags to point to a specific Alpine version they consider stable for that .NET release, so developers don’t need to constantly update OS versions manually. In this case, the floating tag would resolve to an actual image version <code class="language-plaintext highlighter-rouge">aspnet:8.0.18-alpine3.22</code>.</li>
+  <li>However, the Alpine <code class="language-plaintext highlighter-rouge">3.22</code> minor release introduced a major issue after upgrading its OpenSSL dependency. It caused clients based on that image to intermittently fail to connect to Cosmos DB under certain conditions involving multi-region setups and specific connection modes, causing a critical incident on Azure.</li>
+</ul>
+
+<p>Any new deployment of a .NET application, based on this setup, would automatically point to the latest Patch version of the .NET 8 runtime, which would pull together the updated Docker image and automatically adopt the breaking change.</p>
+
+<h3 id="takeways">Takeways</h3>
+<p>I prefer to err on the side of caution when it comes to dependency management and put safeguards in place to minimize risks.
+At the same time, recognizing there’s also risk in delaying the adoption of bug fixes.</p>
+
+<p>Here are a few practices I’ve found effective:</p>
+<ul>
+  <li>For public artifacts, maintain internal mirrors with a controlled lag to the latest public releases. It gives the ecosystem time to uncover early issues, while ensuring you’re not indefinitely lagging behind.</li>
+  <li>With internal artifacts, it’s safer to float the Patch version, but rely on tooling to highlight dependencies drifting too far apart from the latest, and ensure diligence on the teams to upgrade them.</li>
+  <li>Handle security patches through SCA vulnerability feeds to flag issues. Security teams should review flagged vulnerabilities, prioritize them, and apply hotfixes when necessary, addressing critical issues promptly.</li>
+  <li>Avoid preview versions in production at all costs. Even if a preview release includes a tempting fix, it carries considerable risk of breaking something else.</li>
+</ul>
+
+<p>Infrastructure maturity can allow some relaxation of these safeguards.
+With Smoke tests, Canary releases, and Beta rings, new dependencies can be tried in production with limited exposure and self-recovering capabilities, making it possible to adopt updates more quickly without compromising reliability.</p>
+
+<h1 id="conclusion">Conclusion</h1>
+<p>Semantic Versioning is a valuable framework. It gives guidance for reasoning about changes. But it is not gospel. Version numbers are estimates, not guarantees, and treating them as the absolute truth is what leads to painful surprises.</p>
+
+<p>For engineers, the lesson is clear: know the foundations you’re building on, and understand the risks that come with them.</p>]]></content><author><name>Felipe Nipo</name></author><category term="software-engineering" /><category term="software-engineering" /><summary type="html"><![CDATA[Semantic Versioning became the industry standard for managing releases, following the pattern MAJOR.MINOR.PATCH: Patch is for safe bug fixes Minor is for safe backward-compatible changes Major increases are for breaking changes or significant milestones]]></summary></entry><entry><title type="html">Merging Message Types in a Kafka Topic</title><link href="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html" rel="alternate" type="text/html" title="Merging Message Types in a Kafka Topic" /><published>2024-09-16T00:00:00+00:00</published><updated>2024-09-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html"><![CDATA[<p>When I first started designing event-driven systems I followed the guideline of separating each message type into 
+its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.</p>
+
+<p>As I encountered systems with hundreds of kafka topics, I began to see some downsides, the sheer amount of moving parts and their interactions made it hard to account for all the potential race conditions and eventual consistency scenarios, it became a cognitive burden on the team, leading us to rethink our approach. We started asking ourselves:</p>
+<ul>
+  <li>Do we need to apply eventual consistency everywhere?</li>
+  <li>How can we make a simpler version of this complexity?</li>
+</ul>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a7175657565206f726465725f637265617465645f746f706963205b0a202020202a2a4f726465724372656174656420546f7069632a2a0a5d0a0a7175657565206f726465725f70726f6365737365645f746f706963205b0a202020202a2a4f7264657250726f63657373656420546f7069632a2a0a5d0a0a7175657565206f726465725f7061636b65645f746f706963205b0a202020202a2a4f726465725061636b656420546f7069632a2a0a5d0a0a7175657565206f726465725f736869707065645f746f706963205b0a202020202a2a4f726465725368697070656420546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e206f726465725f637265617465645f746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f70726f6365737365645f746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f7061636b65645f746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f736869707065645f746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a6f726465725f637265617465645f746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d657320746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a6f726465725f637265617465645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f70726f6365737365645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f7061636b65645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f736869707065645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>We decided to refactor our system, taking onboard a model where multiple messages types could coexist within a single topic, as long as the messages belong to the same domain and have symmetric volumes. It allowed to commit only to the complexity needed on a case-by-case basis, optimizing for people’s cognitive resources - the most expensive resource at any company.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a717565756520746f706963205b0a202020202a2a4f7264657220546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d6573204f726465724372656174656420746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320616c6c204f72646572206d657373616765735c6e666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>This also shifted my designing approach, I started seeing dedicated topics per message type as an optimization when eventual consistency applies, but as anything in software engineering it comes with trade-offs, the key is to carefully evaluate the trade-offs in the context of your specific need.</p>
+
+<h2 id="the-benefits">The Benefits</h2>
+<h4 id="guaranteed-message-ordering">Guaranteed Message Ordering</h4>
+<p>The ability to ensure ordering between different message types is a huge advantage!</p>
+
+<p>For example, with a single Order topic and <code class="language-plaintext highlighter-rouge">Orderld</code> as partition key, you eliminate the risk of consuming an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message before an <code class="language-plaintext highlighter-rouge">OrderCreated</code> message. In systems where these messages are on it’s own topics, race condition scenarios could allow a consumer to receive an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message for an Order it doesn’t know exists yet, having to decide between being stuck with the inconsistent message or having to rely on a DLQ and Retry flows.</p>
+
+<p>By leveraging Kafka’s ordering guarantee within partitions, you can avoid these eventual consistency complexities altogether.</p>
+
+<h4 id="kafka-cluster-performance">Kafka Cluster Performance</h4>
+<p>Kafka clusters can suffer performance degradation as the number of topics grows, particularly due to the increase in the amount of partitions overall. Aiming to keep the total number of partitions in the low hundreds helps maintain optimal performance.</p>
+
+<p>In an extreme scenario where there are many granular topics - topics with low-throughput where a single partition more than suffices - consolidating them into fewer coarse topics leads to less partitions being needed in the shared topic, when compared with the sum of partitions from individual topics.</p>
+
+<h2 id="the-drawbacks">The Drawbacks</h2>
+<h4 id="limited-filtering-capabilities">Limited Filtering Capabilities</h4>
+<p>Consumers aren’t able to filter out uninteresting messages, they must consume all messages in the topic and “do nothing” when handling those that aren’t of interest.</p>
+
+<p>This leads to resource waste, and it’s important to consider the Consumer Hit rate - the frequency with which they process messages of interest. If it’s too low and leading to relevant resource waste, consider splitting message types into their own topics.</p>
+
+<p>The best scenario is when the message types within a topic have similar message volumes, making the hit rate even between consumers.</p>
+
+<h4 id="resilience-considerations">Resilience Considerations</h4>
+<p>Less isolation often translates to less resilience, and given messages aren’t isolated on their own topic anymore, they can interfere with each other consumption.</p>
+
+<p>In case a producer introduces a “poison pill” in the topic - a message that causes consumers to fail - it can affect all consumers from that topic, this is why it’s important to ensure the topic belongs to a domain, following a Domain-Driven Design (DDD) approach.</p>
+
+<p>If the message types are from different domains, it means the topic has a shared ownership between multiple bounded-contexts. This coupling can tie their availability together, meaning a failure in one part can cascade across the system and bring multiple parts of your system down together.</p>
+
+<h4 id="services-memory-consumption">Services Memory Consumption</h4>
+<p>On another extreme scenario, when high-traffic topics are consolidated into one, the amount of partitions of the consolidated topic will be multiplied to scale to the much higher load.</p>
+
+<p>A large number of partitions per topic results in more metadata for producers and consumers to manage, leading to increased memory consumption.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>Merging multiple message types into a single Kafka topic is a pattern that provides a stronger consistency guarantees, that can significantly reduce complexity and simplify maintenance, by leveraging Kafka’s ordering guarantees and reducing the amount of moving parts.</p>
+
+<p>If you’re currently grappling with an event-driven architecture, I challenge you to consider whether consolidating topics could benefit your system, think about which parts of your system benefits from eventual consistency, and which could be simplified with this approach.</p>
+
+<p>If you decide to try it, I’d love to hear about your experience!</p>
+
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+  <li><a href="https://martin.kleppmann.com/2018/01/18/event-types-in-kafka-topic.html">Martin Kleppman’s blog post: “Should you put several event types in the same Kafka topic?”</a>: This was an inspiration for my team and influenced our system’s refactoring</li>
+  <li><a href="https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster">Confluent.io post: “How to Choose the Number of Topics/Partitions in a Kafka Cluster?”</a>: Explains how the amount of partitions impacts a Kafka cluster performance</li>
+  <li><a href="https://www.goodreads.com/book/show/28602719-domain-driven-design-distilled">“Domain-Driven Design Distilled” book by Vaughn Vernon</a>: A must-read for any software engineer to get introduced to the challenges involved in managing the complexities of systems and how a Domain mindset can help tackle them.</li>
+</ul>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[When I first started designing event-driven systems I followed the guideline of separating each message type into its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.]]></summary></entry><entry><title type="html">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing</title><link href="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" rel="alternate" type="text/html" title="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing" /><published>2022-06-17T00:00:00+00:00</published><updated>2022-06-17T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html"><![CDATA[<p>The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</p>
+
+<p>This is typically used on systems that can’t compromise availability with locking strategies such as <a href="https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html">Two Phase Commit</a>.</p>
+
+<p>As explained in the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html">Partial execution: At-most-once vs. At-least-once Deliveries</a> post, this presents consistency challenges in partial execution scenarios, particularly when involving non-queriable storage such as a message bus.
+Managing inconsistencies gets even more challenging as a workflow is extended to write to more storages: databases, messaging platforms, cache, elasticsearch, etc…</p>
+
+<p>A workflow may require stronger consistency that guarantees atomicity, which means a guarantee that either the two writes succeed or none of them do, so there is never a partial state.</p>
+
+<p>Another concern with dual-writes is that it reduces the overall availability of a workflow as it is tied to the availability of multiple infrastructure components:</p>
+
+<p>From <a href="https://aws.amazon.com/legal/service-level-agreements/">AWS SLAs</a>:</p>
+<ul>
+  <li>AWS messaging availability is 99.5% (1-day downtime a year)</li>
+  <li>AWS databases availability is 99.5% (1-day downtime a year)</li>
+</ul>
+
+<p>Following the formula for the compound probability of independent events occurring together:</p>
+
+<p>$ P (A \text{ and } B) = P(A) * P(B) $
+$ 0.995 * 0.995 = 0.990 $</p>
+
+<p>The overall workflow availability based on dual-writes is reduced to 99.0%, and downtime is amplified to 3-days a year.</p>
+
+<h1 id="change-data-capture-cdc">Change Data Capture (CDC)</h1>
+
+<p>CDC is a built-in feature in databases such as <a href="https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html">Cassandra</a> and <a href="https://docs.microsoft.com/en-us/azure/cosmos-db/sql/change-feed-processor">Cosmos DB</a> to allow subscription on data changes, i.e. the Observer pattern, with an at-least-once delivery guarantee.</p>
+
+<p>It allows the implementation of a service that reacts to data changes and do some operation, similar to what traditional Triggers provided but completely extracting logic from the database layer.</p>
+
+<p>Databases provide CDC in one of these two flavors:</p>
+<ul>
+  <li>Pull-based: Essentially a long and continuous query. Changes are handled in batches to counter polling latency and are ordered by the date and time they happened. It can capture inserts and updates but is limited when capturing deletes.</li>
+  <li>Push-based: A low-latency subscription on changes. It reads from the log of transactions and guarantees all data changes are captured.</li>
+</ul>
+
+<blockquote>
+  <p>How could CDC help to avoid rollbacks on the <a href="../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html#at-least-once-delivery">at-least-once scenario</a>?</p>
+</blockquote>
+
+<p>One could make a dedicated service that listens to and reacts when a new Order is inserted on the Order table and uses the new record to produce the <em>OrderCreated</em> message asynchronously.
+This design provides an atomicity guarantee that the message is always produced (eventually) and always after the database writing.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204344430a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>This is an idea I explored in a previous work when refactoring a project, and while it is on the right track I realized this would be a bad idea.</p>
+
+<p>The main problem is that it takes away from the workflow the power of defining the message content, leading to:</p>
+<ul>
+  <li>Increased complexity because the message definition logic is now hidden on this intermediate service that produces the <em>OrderCreated</em> message</li>
+  <li>The job of the <em>OrderCreated</em> message producer is not easy, it is based on lots of inferences, mainly because it doesn’t have enough context to do its job except for what it reads from the database Order data model</li>
+  <li>The Order data model may become a mix of data and messaging models to facilitate the job of the <em>OrderCreator</em> producer. It tries to satisfy both needs but ultimately not fitting any</li>
+  <li>Strong coupling between the message model and the Order data model</li>
+</ul>
+
+<h1 id="the-outbox-pattern">The Outbox Pattern</h1>
+
+<p>A simpler approach based on CDC is by implementing an Outbox, to define clear boundaries between the data model and the message model.</p>
+
+<p>In the Outbox Pattern the database is used as a queue and leverages a <a href="https://microservices.io/patterns/data/transaction-log-tailing.html">Transaction Log Tailing</a> mechanism based on CDC to replicate data from the database queue to a messaging platform.</p>
+
+<p>The message model is defined on the <em>OrderCreatedOutbox</em> table on the database completely decoupled from the Order table model.</p>
+
+<p>A workflow can either do both data and message writing atomically in a database transaction, or if not using transactions at least be able to query the database to check if the message was populated and retry when needed.</p>
+
+<p>Also, the workflows have full control over defining and populating the message.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c65206f726465725f73657276696365205b0a202020202a2a4f7264657220736572766963652a2a0a5d0a0a6461746162617365206f726465725f7461626c65205b0a202020202a2a4f72646572207461626c652a2a0a5d0a0a6461746162617365206f7574626f785f7461626c65205b0a202020202a2a4f7264657243726561746564206f7574626f78207461626c652a2a0a5d0a0a72656374616e676c65206d6573736167655f70726f6475636572205b0a202020202a2a4d6573736167652070726f64756365722a2a0a5d0a0a7175657565206d6573736167696e675f706c6174666f726d205b0a202020202a2a4d6573736167696e6720706c6174666f726d2a2a0a5d0a0a6f726465725f73657276696365202d2d3e206f726465725f7461626c65203a20496e73657274204f726465720a6f726465725f73657276696365202d2d3e206f7574626f785f7461626c65203a20496e73657274204f72646572437265617465640a6f7574626f785f7461626c65202d2d3e206d6573736167655f70726f6475636572203a204368616e67652063617074757265640a6d6573736167655f70726f6475636572202d2d3e206d6573736167696e675f706c6174666f726d203a204f72646572437265617465640a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<p>The outbox pattern guarantees the message is eventually produced to the messaging platform, and it increases the workflow availability by depending only on the database availability.</p>
+
+<h1 id="event-sourcing">Event Sourcing</h1>
+
+<blockquote>
+  <p>“Eventsourcing uses storage as a way of communication, it solves storage and messaging for you” <br />Vaugh Vernon, on <a href="https://www.goodreads.com/en/book/show/28602719-domain-driven-design-distilled">Domain-Driven Design Distilled</a> book</p>
+</blockquote>
+
+<p>On an event-sourced database, data is stored as if it were messages, there are no tables, instead, there are streams of events that mimic a queue of messages.</p>
+
+<p>When working with event sourcing, a classic confusion is on the difference between events and messages, they have very different purposes and can be simply explained by <a href="https://queue.acm.org/detail.cfm?id=3415014">Pat Helland’s paper</a> with the difference between <em>data that lives inside</em> and <em>data that lives outside</em>.</p>
+
+<p>Events are part of the <em>data that lives inside</em> (but also immutable) and part of the authoritative data source, while messages are part of the <em>data that lives outside</em> and are designed for communication across <a href="https://martinfowler.com/bliki/BoundedContext.html">Bounded Contexts</a>.</p>
+
+<p>Unfortunately, the <em>Event</em> term is overloaded and used in both situations, messages are even called <em>integration events</em> in the DDD world,
+<a href="https://twitter.com/martinfowler">Martin Fowler</a> has a nice presentation on the many meanings of the <em>Event</em> term:</p>
+
+<p><img src="https://www.youtube.com/watch?v=STKCRSUsyP0&amp;width=400&amp;height=250" alt="" /></p>
+
+<p>An event is a kind of data that carries context to communicate what has happened to an aggregate.
+And because it is so closer to a message, it is simpler to outsource the message definition logic to a CDC-based message producer as intended in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a>.
+With an event providing context to the message producer, what is outsourced to this service is mostly the decision of what events should be published to the outside world and the mechanics of using the messaging platform.</p>
+
+<p>However, the same data model concerns pointed out in <a href="#change-data-capture-cdc">Change Data Capture (CDC)</a> also apply here, and it shouldn’t fall into the trap of leaking the message model to the event model,
+the publishing service should perform stream-table join operations when needed to enrich the message, gathering related data that is not directly present in the event.</p>
+
+<p>The act of publishing a stream of internal events to the <em>data that live outside</em> is also called <em>Projection</em>, and in recent work, I used the <a href="https://github.com/jet/propulsion">Propulsion</a> library on .NET to implement a Projection.
+Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.</p>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[The dual-writes pattern is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.]]></summary></entry><entry><title type="html">Partial execution: At-most-once vs. At-least-once Deliveries</title><link href="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html" rel="alternate" type="text/html" title="Partial execution: At-most-once vs. At-least-once Deliveries" /><published>2022-06-16T00:00:00+00:00</published><updated>2022-06-16T00:00:00+00:00</updated><id>https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries</id><content type="html" xml:base="https://fnipo.github.io/distributed-systems/2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html"><![CDATA[<p>A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.</p>
+
+<blockquote>
+  <p>What if some infrastructure component goes down during the workflow execution and it can’t complete?</p>
+</blockquote>
+
+<p>The beginning of the workflow may execute, but some parts at the end may not, the side effects of this workflow are then partially applied.</p>
+
+<p>This situation leaves data in an incomplete state, that needs to be fixed by either retrying until complete or rollbacking entirely.</p>
+
+<p>This is a partial execution scenario, and the order in which a workflow executed its steps is directly related to its consistency guarantees.</p>
+
+<p>It all boils down to what was executed first between the two: The database writing or the message/API request delivery?</p>
+
+<h1 id="at-most-once-delivery">At-most-once delivery</h1>
+
+<p>Consider a feature for Report Generation that is done asynchronously and may take minutes to complete, the user is updated by email about each stage of the process.</p>
+
+<p>When creating the Report generation request, the system sends an email to the customer to log that a Report Request was created and will be processed soon.</p>
+
+<p>The steps of this workflow are:</p>
+<ol>
+  <li>The client calls the Report API passing on a <em>ReportRequestId</em> and criteria for the report</li>
+  <li>The API validates if that <em>ReportRequestId</em> is already created</li>
+  <li>If yes, it returns an <em>HTTP 409</em> code to signal the Id provided has already been taken by an existing resource</li>
+  <li>If not, it creates the <em>ReportRequest</em> record in the database</li>
+  <li>In the end, it sends a request to an Email platform to update the customer that the <em>ReportRequest</em> was created</li>
+  <li>Returns an <em>HTTP 201</em> code</li>
+</ol>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d20436c6f7564426f72646572436f6c6f7220236163616361630a736b696e706172616d20436c6f7564466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c652022312e2047656e6572617465205265706f727420485454502072657175657374222061732067656e65726174655f726571756573740a0a72656374616e676c652022322e20446f6573202a5265706f7274526571756573742a2027313233272065786973743f2220617320636865636b5f6578697374730a0a72656374616e676c652022332e2052657475726e2048545450203430395c6e28456e64292220617320636f6e666c6963745f726573706f6e73650a64617461626173652022342e20437265617465202a5265706f7274526571756573742a207265636f72645c6e6f6e20646174616261736522206173206372656174655f7265636f72640a636c6f75642022352e2053656e642048545450207265717565737420746f20456d61696c20506c6174666f726d2220617320656d61696c5f726571756573740a72656374616e676c652022362e2052657475726e2048545450203230315c6e28456e64292220617320637265617465645f726573706f6e73650a0a67656e65726174655f72657175657374202d2d3e20636865636b5f6578697374733a2049643a2027313233270a636865636b5f657869737473202d2d3e20636f6e666c6963745f726573706f6e7365203a205965730a636865636b5f657869737473202d2d3e206372656174655f7265636f7264203a204e6f0a6372656174655f7265636f7264202d2d3e20656d61696c5f726571756573740a656d61696c5f72657175657374202d2d3e20637265617465645f726573706f6e73650a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<blockquote>
+  <p>What if the Email platform is down at step 5?</p>
+</blockquote>
+
+<p>The workflow created the <em>ReportRequest</em> record on the database, and now any attempt to retry the request will execute up to step 3.</p>
+
+<p>This is because typically there is a database writing step that marks the workflow as completed (step 4), together with an idempotency guard (step 2) to suppress duplicated side effects.</p>
+
+<p>After a request is marked as completed, the service has no way to distinguish between the scenario where a client is sending a duplicated request or the scenario where a client is retrying a partially executed request.</p>
+
+<p>In summary, in the best-case scenario, step 5 successfully sends the Email request once, otherwise, the Email request is lost forever.</p>
+
+<p>This is an at-most-once guarantee, i.e. no guaranteed delivery.
+Its implementation executes the final database writing before the message or request is sent.
+This model is applied to non-critical communication that presents low business impact if it is never sent.</p>
+
+<p>At-most-once delivery isn’t suitable for critical communication though, one that triggers a chain of required processing on other services.
+If the message is lost forever, other services will never be able to pick it up to continue processing.</p>
+
+<h1 id="at-least-once-delivery">At-least-once delivery</h1>
+
+<p>Let’s imagine another scenario with an Order creation service that produces an <em>OrderCreated</em> message to trigger workflows downstream for handling payments, reserving inventory, producing reports, etc.</p>
+
+<p>The steps of this workflow are:</p>
+<ol>
+  <li>The client calls the Order API passing on the Order payload</li>
+  <li>The API validates if that OrderId is already created</li>
+  <li>If yes, it returns an <em>HTTP 409</em> code to signal the Id provided has already been taken by an existing resource</li>
+  <li>If not, it produces an OrderCreated message to a topic</li>
+  <li>In the end, it creates the Order record on the database</li>
+  <li>Returns an <em>HTTP 201</em> code</li>
+</ol>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2044617461626173654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204461746162617365426f72646572436f6c6f7220236163616361630a736b696e706172616d204461746162617365466f6e74436f6c6f7220233561356135610a736b696e706172616d20436c6f7564426f72646572436f6c6f7220236163616361630a736b696e706172616d20436c6f7564466f6e74436f6c6f7220233561356135610a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a746f7020746f20626f74746f6d20646972656374696f6e0a0a72656374616e676c652022312e204f72646572204372656174652048545450207265717565737422206173206f726465725f726571756573740a0a72656374616e676c652022322e20446f6573204f726465722027313233272065786973743f2220617320636865636b5f6f726465720a0a72656374616e676c652022332e2052657475726e2048545450203430395c6e28456e64292220617320636f6e666c6963745f726573706f6e73650a0a71756575652022342e2050726f64756365204f7264657243726561746564206d657373616765222061732070726f647563655f6d6573736167650a0a64617461626173652022352e20437265617465204f72646572207265636f72645c6e6f6e20646174616261736522206173206372656174655f6f726465720a0a72656374616e676c652022362e2052657475726e2048545450203230315c6e28456e64292220617320637265617465645f726573706f6e73650a0a6f726465725f72657175657374202d2d3e20636865636b5f6f72646572203a2049643a2027313233270a636865636b5f6f72646572202d2d3e20636f6e666c6963745f726573706f6e7365203a205965730a636865636b5f6f72646572202d2d3e2070726f647563655f6d657373616765203a204e6f0a70726f647563655f6d657373616765202d2d3e206372656174655f6f726465720a6372656174655f6f72646572202d2d3e20637265617465645f726573706f6e73650a0a40656e64756d6c0a40656e64756d6c" /></p>
+
+<blockquote>
+  <p>What if the <em>OrderCreated</em> message producing fails at step 4?</p>
+</blockquote>
+
+<p>In a partial execution scenario, the workflow will be retried until the final database writing succeeds, and the request is marked as completed.
+As the message is produced before the database writing, the message is guaranteed to be sent.</p>
+
+<p>This is an at-least-once guarantee, it is a stronger guarantee than at-most-once and ensures the message is always delivered.</p>
+
+<p>This provides a strong enough guarantee for most workflows while simple enough.
+I happened to work on the redesign of a system fully based on <a href="../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html#change-data-capture-cdc">Change Data Capture</a> that was migrating to this model for its simplicity and for providing enough consistency for most of our workflows.</p>
+
+<p>However, there are still challenges with this model, as described below.</p>
+
+<h5 id="idempotency">Idempotency</h5>
+
+<p>This model allows a service to produce the same message <em>N</em> times, as it retries <em>N</em> times, hence it doesn’t take care of suppressing duplicated side effects anymore.</p>
+
+<p>Services consuming the <em>OrderCreated</em> message may assume multiple Orders were created.</p>
+
+<p>This model requires that messages are designed to be uniquely identified, e.g. by an <em>OrderId</em> field, and requires an effort across the system to ensure this identifier is used for deduplication and idempotency</p>
+
+<p>This is easy though because services should be idempotent anyway to be resilient to situations that may cause messages to be consumed more than once even though it was produced only once, such as when processing in batches or consumer offset skews.</p>
+
+<h5 id="race-conditions">Race conditions</h5>
+
+<blockquote>
+  <p>What if it fails at step 5 and takes many retries to succeed?</p>
+</blockquote>
+
+<p>During this time window, downstream services may have already processed the <em>OrderCreated</em> message faster than the database writing finally succeeds.
+Maybe one of these services attempted to make HTTP requests back to your service to ask for more information about the Order and it failed because the Order didn’t even exist yet.</p>
+
+<p>Race conditions are temporary inconsistencies and are at the heart of developing distributed systems, and services must be designed with resilience in mind, assuming anything may be unavailable and fail at anytime.</p>
+
+<p>As far as things are eventually consistent it is possible to mitigate these situations with resilience guards, to ensure all required conditions are in place and avoiding assumptions before executing anything, the same way you would validate if inputs are <em>null</em> before executing your function.</p>
+
+<h5 id="rollbacks">Rollbacks</h5>
+
+<blockquote>
+  <p>What if only at step 5 do you discover the Order can’t be created?</p>
+</blockquote>
+
+<p>Possible scenarios:</p>
+<ul>
+  <li>Some of the business invariants are checked at the database level</li>
+  <li>This is a non-deterministic flow such as a reservation, and the database writing fails to avoid overbooking</li>
+  <li>The client just gives up on the Order and stops retrying</li>
+</ul>
+
+<p>Now downstream services are already processing the message, handling payment, and moving inventory. It rippled out a permanent inconsistency across the system.</p>
+
+<p>As <a href="https://queue.acm.org/detail.cfm?id=3415014">Pat Helland’s paper</a> describes, data that lives outside is immutable, a message can’t be un-sent and rollback across many services takes a heavy toll.</p>
+
+<p>To roll back, it needs to span a whole Order Cancellation <a href="https://microservices.io/patterns/data/saga.html">Saga</a>, to notify other services and allow them to take compensatory actions, e.g. refund payment.</p>
+
+<p>Sagas are costly to implement tough, it requires strong coordination and testing between multiple teams, and it is usually designed by a high-level architect that understands most of the system.</p>
+
+<h1 id="dual-writes">Dual-writes</h1>
+
+<p>The strategies above follow the <em>dual-writes</em> pattern, which is anytime a workflow has to write to two or more storages while not leveraging any transaction isolation.</p>
+
+<p>To ensure messages are delivered while mitigating the costs of rollbacks, a service needs atomicity guarantees that are not provided by this pattern.
+Follow the <a href="../../../2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html">Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing</a> post to learn more about strategies that provides atomicity.</p>]]></content><author><name>Felipe Nipo</name></author><category term="distributed-systems" /><category term="distributed-systems" /><summary type="html"><![CDATA[A workflow inside a microservice typically writes stuff to a database and produces a message or API request to another service.]]></summary></entry></feed>

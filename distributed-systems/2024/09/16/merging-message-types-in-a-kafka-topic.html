@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<!--
+  Minimal Mistakes Jekyll Theme 4.27.3 by Michael Rose
+  Copyright 2013-2025 Michael Rose - mademistakes.com | @mmistakes
+  Free for personal and commercial use under the MIT license
+  https://github.com/mmistakes/minimal-mistakes/blob/master/LICENSE
+--><html lang="en" class="no-js">
+  <head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta charset="utf-8">
+
+<!-- begin _includes/seo.html --><title>Merging Message Types in a Kafka Topic - Felipe Nipo</title>
+<meta name="description" content="When I first started designing event-driven systems I followed the guideline of separating each message type into  its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.">
+
+
+  <meta name="author" content="Felipe Nipo">
+  
+  <meta property="article:author" content="Felipe Nipo">
+  
+
+
+<meta property="og:type" content="article">
+<meta property="og:locale" content="en">
+<meta property="og:site_name" content="Felipe Nipo">
+<meta property="og:title" content="Merging Message Types in a Kafka Topic">
+<meta property="og:url" content="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html">
+
+
+  <meta property="og:description" content="When I first started designing event-driven systems I followed the guideline of separating each message type into  its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.">
+
+
+
+  <meta property="og:image" content="https://fnipo.github.io/assets/2024-09-16.jpg">
+
+
+
+
+
+  <meta property="article:published_time" content="2024-09-16T00:00:00+00:00">
+
+
+
+
+
+
+<link rel="canonical" href="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html">
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- end _includes/seo.html -->
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<script>
+  document.documentElement.className = document.documentElement.className.replace(/\bno-js\b/g, '') + ' js ';
+  
+</script>
+
+<!-- For all browsers -->
+<link rel="stylesheet" href="/assets/css/main.css">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css" as="style" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@latest/css/all.min.css"></noscript>
+
+
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&amp;display=swap" rel="stylesheet">
+  </head>
+
+  <body class="layout--single wide" dir="ltr">
+    <nav class="skip-links">
+  <ul>
+    <li><a href="#site-nav" class="screen-reader-shortcut">Skip to primary navigation</a></li>
+    <li><a href="#main" class="screen-reader-shortcut">Skip to content</a></li>
+    <li><a href="#footer" class="screen-reader-shortcut">Skip to footer</a></li>
+  </ul>
+</nav>
+
+    
+
+<div class="masthead">
+  <div class="masthead__inner-wrap">
+    <div class="masthead__menu">
+      <nav id="site-nav" class="greedy-nav">
+        
+        <a class="site-title" href="/">
+          Felipe Nipo
+          
+        </a>
+        <ul class="visible-links">
+          <!-- DISABLED MASTHEAD -->
+          <!--<li class="masthead__menu-item">
+              <a
+                href="https://mmistakes.github.io/minimal-mistakes/docs/quick-start-guide/"
+                
+                
+              >Quick-Start Guide</a>
+            </li>-->
+        </ul>
+        
+        <button class="search__toggle" type="button">
+          <span class="visually-hidden">Toggle search</span>
+          <i class="fas fa-search"></i>
+        </button>
+        
+        <button class="greedy-nav__toggle hidden" type="button">
+          <span class="visually-hidden">Toggle menu</span>
+          <div class="navicon"></div>
+        </button>
+        <ul class="hidden-links hidden"></ul>
+      </nav>
+    </div>
+  </div>
+</div>
+
+    <div class="initial-content">
+      
+
+
+
+
+
+<div id="main" role="main">
+  
+  <div class="sidebar sticky">
+  
+
+
+<div itemscope itemtype="https://schema.org/Person" class="h-card">
+
+  
+    <div class="author__avatar">
+      <a href="https://fnipo.github.io/">
+        <img src="/assets/bio-photo.jpg" alt="Felipe Nipo" itemprop="image" class="u-photo">
+      </a>
+    </div>
+  
+
+  <div class="author__content">
+    <h3 class="author__name p-name" itemprop="name">
+      <a class="u-url" rel="me" href="https://fnipo.github.io/" itemprop="url">Felipe Nipo</a>
+    </h3>
+    
+      <div class="author__bio p-note" itemprop="description">
+        <p>Software Engineer</p>
+
+      </div>
+    
+  </div>
+
+  <div class="author__urls-wrapper">
+    <button class="btn btn--inverse">Follow</button>
+    <ul class="author__urls social-icons">
+      
+        <li itemprop="homeLocation" itemscope itemtype="https://schema.org/Place">
+          <i class="fas fa-fw fa-map-marker-alt" aria-hidden="true"></i> <span itemprop="name" class="p-locality">Dublin, Ireland</span>
+        </li>
+      
+
+      
+        
+          
+            <li><a href="https://twitter.com/felipenipo" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-twitter-square" aria-hidden="true"></i><span class="label">Twitter</span></a></li>
+          
+        
+          
+            <li><a href="https://www.linkedin.com/in/felipenipo/" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-linkedin" aria-hidden="true"></i><span class="label">LinkedIn</span></a></li>
+          
+        
+          
+            <li><a href="https://github.com/fnipo" rel="nofollow noopener noreferrer me" itemprop="sameAs"><i class="fab fa-fw fa-github" aria-hidden="true"></i><span class="label">GitHub</span></a></li>
+          
+        
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      
+
+      <!--
+  <li>
+    <a href="http://link-to-whatever-social-network.com/user/" itemprop="sameAs" rel="nofollow noopener noreferrer me">
+      <i class="fas fa-fw" aria-hidden="true"></i> Custom Social Profile Link
+    </a>
+  </li>
+-->
+    </ul>
+  </div>
+</div>
+
+  
+  </div>
+
+
+
+  <article class="page" itemscope itemtype="https://schema.org/CreativeWork">
+    <meta itemprop="headline" content="Merging Message Types in a Kafka Topic">
+    <meta itemprop="description" content="When I first started designing event-driven systems I followed the guideline of separating each message type into its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.">
+    <meta itemprop="datePublished" content="2024-09-16T00:00:00+00:00">
+    
+
+    <div class="page__inner-wrap">
+      
+        <header>
+          <h1 id="page-title" class="page__title" itemprop="headline">
+            <a href="https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html" itemprop="url">Merging Message Types in a Kafka Topic
+</a>
+          </h1>
+          
+
+  <p class="page__meta">
+    
+
+    
+
+    
+      
+      
+
+      <span class="page__meta-readtime">
+        <i class="far fa-clock" aria-hidden="true"></i>
+        
+          4 minute read
+        
+      </span>
+    
+  </p>
+
+
+        </header>
+      
+
+      <section class="page__content" itemprop="text">
+        
+        <p>When I first started designing event-driven systems I followed the guideline of separating each message type into 
+its own dedicated topic, it seemed like a foolproof way to ensure clarity and a maintainable system.</p>
+
+<p>As I encountered systems with hundreds of kafka topics, I began to see some downsides, the sheer amount of moving parts and their interactions made it hard to account for all the potential race conditions and eventual consistency scenarios, it became a cognitive burden on the team, leading us to rethink our approach. We started asking ourselves:</p>
+<ul>
+  <li>Do we need to apply eventual consistency everywhere?</li>
+  <li>How can we make a simpler version of this complexity?</li>
+</ul>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a7175657565206f726465725f637265617465645f746f706963205b0a202020202a2a4f726465724372656174656420546f7069632a2a0a5d0a0a7175657565206f726465725f70726f6365737365645f746f706963205b0a202020202a2a4f7264657250726f63657373656420546f7069632a2a0a5d0a0a7175657565206f726465725f7061636b65645f746f706963205b0a202020202a2a4f726465725061636b656420546f7069632a2a0a5d0a0a7175657565206f726465725f736869707065645f746f706963205b0a202020202a2a4f726465725368697070656420546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e206f726465725f637265617465645f746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f70726f6365737365645f746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f7061636b65645f746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e206f726465725f736869707065645f746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a6f726465725f637265617465645f746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d657320746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a6f726465725f637265617465645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f70726f6365737365645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f7061636b65645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a6f726465725f736869707065645f746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c"></p>
+
+<p>We decided to refactor our system, taking onboard a model where multiple messages types could coexist within a single topic, as long as the messages belong to the same domain and have symmetric volumes. It allowed to commit only to the complexity needed on a case-by-case basis, optimizing for people’s cognitive resources - the most expensive resource at any company.</p>
+
+<p><img class="plantuml align-center" src="http://www.plantuml.com/plantuml/svg/~h407374617274756d6c0a407374617274756d6c0a0a217468656d6520626c7565677261790a736b696e706172616d2051756575654261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d205175657565426f72646572436f6c6f7220236163616361630a736b696e706172616d205175657565466f6e74436f6c6f7220233561356135610a736b696e706172616d206261636b67726f756e64436f6c6f7220234646464646460a736b696e706172616d204172726f77436f6c6f7220477261790a6c65667420746f20726967687420646972656374696f6e0a0a72656374616e676c65206f726465725f70726f6475636572205b0a202020202a2a4f72646572204d657373616765732050726f64756365722a2a0a5d0a0a717565756520746f706963205b0a202020202a2a4f7264657220546f7069632a2a0a5d0a0a72656374616e676c6520696e76656e746f72795f636f6e73756d6572205b0a202020202a2a496e76656e746f727920446f6d61696e20436f6e73756d65722a2a0a5d0a0a72656374616e676c65207265706f7274696e675f636f6e73756d6572205b0a202020202a2a5265706f7274696e6720446f6d61696e20436f6e73756d65722a2a0a5d0a0a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572437265617465645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f7264657250726f6365737365645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f726465725061636b65645c6e28706b3a206f726465724964290a6f726465725f70726f6475636572202d2d3e20746f706963203a2050726f6475636573204f72646572536869707065645c6e28706b3a206f726465724964290a0a746f706963202d2d3e20696e76656e746f72795f636f6e73756d6572203a20436f6e73756d6573204f726465724372656174656420746f2068616e646c655c6e70726f6475637473207072652d7265736572766174696f6e0a746f706963202d2d3e207265706f7274696e675f636f6e73756d6572203a20436f6e73756d657320616c6c204f72646572206d657373616765735c6e666f72206175646974696e670a0a40656e64756d6c0a40656e64756d6c"></p>
+
+<p>This also shifted my designing approach, I started seeing dedicated topics per message type as an optimization when eventual consistency applies, but as anything in software engineering it comes with trade-offs, the key is to carefully evaluate the trade-offs in the context of your specific need.</p>
+
+<h2 id="the-benefits">The Benefits</h2>
+<h4 id="guaranteed-message-ordering">Guaranteed Message Ordering</h4>
+<p>The ability to ensure ordering between different message types is a huge advantage!</p>
+
+<p>For example, with a single Order topic and <code class="language-plaintext highlighter-rouge">Orderld</code> as partition key, you eliminate the risk of consuming an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message before an <code class="language-plaintext highlighter-rouge">OrderCreated</code> message. In systems where these messages are on it’s own topics, race condition scenarios could allow a consumer to receive an <code class="language-plaintext highlighter-rouge">OrderShipped</code> message for an Order it doesn’t know exists yet, having to decide between being stuck with the inconsistent message or having to rely on a DLQ and Retry flows.</p>
+
+<p>By leveraging Kafka’s ordering guarantee within partitions, you can avoid these eventual consistency complexities altogether.</p>
+
+<h4 id="kafka-cluster-performance">Kafka Cluster Performance</h4>
+<p>Kafka clusters can suffer performance degradation as the number of topics grows, particularly due to the increase in the amount of partitions overall. Aiming to keep the total number of partitions in the low hundreds helps maintain optimal performance.</p>
+
+<p>In an extreme scenario where there are many granular topics - topics with low-throughput where a single partition more than suffices - consolidating them into fewer coarse topics leads to less partitions being needed in the shared topic, when compared with the sum of partitions from individual topics.</p>
+
+<h2 id="the-drawbacks">The Drawbacks</h2>
+<h4 id="limited-filtering-capabilities">Limited Filtering Capabilities</h4>
+<p>Consumers aren’t able to filter out uninteresting messages, they must consume all messages in the topic and “do nothing” when handling those that aren’t of interest.</p>
+
+<p>This leads to resource waste, and it’s important to consider the Consumer Hit rate - the frequency with which they process messages of interest. If it’s too low and leading to relevant resource waste, consider splitting message types into their own topics.</p>
+
+<p>The best scenario is when the message types within a topic have similar message volumes, making the hit rate even between consumers.</p>
+
+<h4 id="resilience-considerations">Resilience Considerations</h4>
+<p>Less isolation often translates to less resilience, and given messages aren’t isolated on their own topic anymore, they can interfere with each other consumption.</p>
+
+<p>In case a producer introduces a “poison pill” in the topic - a message that causes consumers to fail - it can affect all consumers from that topic, this is why it’s important to ensure the topic belongs to a domain, following a Domain-Driven Design (DDD) approach.</p>
+
+<p>If the message types are from different domains, it means the topic has a shared ownership between multiple bounded-contexts. This coupling can tie their availability together, meaning a failure in one part can cascade across the system and bring multiple parts of your system down together.</p>
+
+<h4 id="services-memory-consumption">Services Memory Consumption</h4>
+<p>On another extreme scenario, when high-traffic topics are consolidated into one, the amount of partitions of the consolidated topic will be multiplied to scale to the much higher load.</p>
+
+<p>A large number of partitions per topic results in more metadata for producers and consumers to manage, leading to increased memory consumption.</p>
+
+<h2 id="conclusion">Conclusion</h2>
+<p>Merging multiple message types into a single Kafka topic is a pattern that provides a stronger consistency guarantees, that can significantly reduce complexity and simplify maintenance, by leveraging Kafka’s ordering guarantees and reducing the amount of moving parts.</p>
+
+<p>If you’re currently grappling with an event-driven architecture, I challenge you to consider whether consolidating topics could benefit your system, think about which parts of your system benefits from eventual consistency, and which could be simplified with this approach.</p>
+
+<p>If you decide to try it, I’d love to hear about your experience!</p>
+
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+  <li>
+<a href="https://martin.kleppmann.com/2018/01/18/event-types-in-kafka-topic.html">Martin Kleppman’s blog post: “Should you put several event types in the same Kafka topic?”</a>: This was an inspiration for my team and influenced our system’s refactoring</li>
+  <li>
+<a href="https://www.confluent.io/blog/how-choose-number-topics-partitions-kafka-cluster">Confluent.io post: “How to Choose the Number of Topics/Partitions in a Kafka Cluster?”</a>: Explains how the amount of partitions impacts a Kafka cluster performance</li>
+  <li>
+<a href="https://www.goodreads.com/book/show/28602719-domain-driven-design-distilled">“Domain-Driven Design Distilled” book by Vaughn Vernon</a>: A must-read for any software engineer to get introduced to the challenges involved in managing the complexities of systems and how a Domain mindset can help tackle them.</li>
+</ul>
+
+        
+      </section>
+
+      <footer class="page__meta">
+        
+        
+
+
+        
+
+  <p class="page__date"><strong><i class="fas fa-fw fa-calendar-alt" aria-hidden="true"></i> Updated:</strong> <time class="dt-published" datetime="2024-09-16T00:00:00+00:00">September 16, 2024</time></p>
+
+      </footer>
+
+      <section class="page__share">
+  <h4 class="page__share-title">Share on</h4>
+
+  <a href="https://x.com/intent/tweet?text=Merging+Message+Types+in+a+Kafka+Topic%20https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2024%2F09%2F16%2Fmerging-message-types-in-a-kafka-topic.html" class="btn btn--x" aria-label="Share on X" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on X">
+    <i class="fab fa-fw fa-x-twitter" aria-hidden="true"></i><span> X</span>
+  </a>
+
+  <a href="https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2024%2F09%2F16%2Fmerging-message-types-in-a-kafka-topic.html" class="btn btn--facebook" aria-label="Share on Facebook" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on Facebook">
+    <i class="fab fa-fw fa-facebook" aria-hidden="true"></i><span> Facebook</span>
+  </a>
+
+  <a href="https://www.linkedin.com/shareArticle?mini=true&url=https://fnipo.github.io/distributed-systems/2024/09/16/merging-message-types-in-a-kafka-topic.html" class="btn btn--linkedin" aria-label="Share on LinkedIn" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on LinkedIn">
+    <i class="fab fa-fw fa-linkedin" aria-hidden="true"></i><span> LinkedIn</span>
+  </a>
+
+  <a href="https://bsky.app/intent/compose?text=Merging+Message+Types+in+a+Kafka+Topic%20https%3A%2F%2Ffnipo.github.io%2Fdistributed-systems%2F2024%2F09%2F16%2Fmerging-message-types-in-a-kafka-topic.html" class="btn btn--bluesky" onclick="window.open(this.href, 'window', 'left=20,top=20,width=500,height=500,toolbar=1,resizable=0'); return false;" title="Share on Bluesky">
+    <i class="fab fa-fw fa-bluesky" aria-hidden="true"></i><span> Bluesky</span>
+  </a>
+</section>
+
+
+      
+  <nav class="pagination">
+    
+      <a href="/distributed-systems/2022/06/17/solving-dual-writes-with-cdc-and-the-outbox-pattern.html" class="pagination--pager" title="Solving Dual-writes: Change Data Capture, The Outbox Pattern, and Event Sourcing">Previous</a>
+    
+    
+      <a href="/software-engineering/2025/07/01/semantic-versioning-is-just-an-estimate.html" class="pagination--pager" title="Semantic Versioning is Just an Estimate">Next</a>
+    
+  </nav>
+
+
+    </div>
+
+    
+  </article>
+
+  
+  
+</div>
+
+      
+    </div>
+
+    
+      <div class="search-content">
+        <div class="search-content__inner-wrap">
+<form class="search-content__form" onkeydown="return event.key != 'Enter';" role="search">
+    <label class="sr-only" for="search">
+      Enter your search term...
+    </label>
+    <input type="search" id="search" class="search-input" tabindex="-1" placeholder="Enter your search term...">
+  </form>
+  <div id="results" class="results"></div>
+</div>
+
+      </div>
+    
+
+    <div id="footer" class="page__footer">
+      <footer>
+        <!-- start custom footer snippets -->
+
+<!-- end custom footer snippets -->
+        
+
+
+<div class="page__footer-copyright">© 2025 <a href="https://fnipo.github.io">Felipe Nipo</a>. Powered by <a href="https://jekyllrb.com" rel="nofollow">Jekyll</a> &amp; <a href="https://mademistakes.com/work/jekyll-themes/minimal-mistakes/" rel="nofollow">Minimal Mistakes</a>.</div>
+
+      </footer>
+    </div>
+
+    
+  <script src="/assets/js/main.min.js"></script>
+
+
+
+
+<script src="/assets/js/lunr/lunr.min.js"></script>
+<script src="/assets/js/lunr/lunr-store.js"></script>
+<script src="/assets/js/lunr/lunr-en.js"></script>
+
+
+
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-P9LR4DJVN7"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-P9LR4DJVN7', { 'anonymize_ip': false});
+</script>
+
+
+
+
+
+
+
+
+  </body>
+</html>
