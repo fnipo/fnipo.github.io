@@ -488,7 +488,7 @@ Delivery guarantees also apply in reverse. Before rolling consumers back, you ma
 
 # Conclusion
 
-Idempotency is a powerful tool for simplifying migrations, particularly for high-available system and when exactly-once guarantees are desirable.
+Idempotency is a powerful tool for simplifying migrations, particularly for high-available systems.
 
 It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a risky choreography of producer and consumer switches, usually leading to downtimes.
 
