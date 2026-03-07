@@ -454,7 +454,7 @@ rectangle "Initial State" #line:Gray {
 @enduml
 ```{: .align-center}
 
-Idempotent consumers can consume from both topics simultaneously, using an idempotency key to deduplicate messages and enable a gradual migration.
+Idempotent consumers allow both topics to be consumed in parallel by their respective consumers, using an idempotency key to detect when a message was already processed, and enabling a gradual migration.
 
 Old consumers would still process messages from the old topic. And in the meanwhile, the new consumers will be already consuming from the new source.
 
@@ -474,7 +474,7 @@ Read more in the Hard Switches post (coming soon...).
 
 # Rollbacks
 
-Rollbacks are as complex as migrations themselves.
+Every migration plan will involve also a rollback plan in case any issues are discovered. They should be as solid, tested, and complex as the migration plans themselves.
 
 For example, if a [Scenario 3](https://felipenipo.com/distributed-systems/2025/09/16/consumers-producers-migrations-strategies.html#scenario-3-a-new-topic-has-to-be-introduced) migration involves:
 1. Switching producers to a new topic
@@ -488,8 +488,8 @@ Delivery guarantees also apply in reverse. Before rolling consumers back, you ma
 
 # Conclusion
 
-Idempotency is a powerful tool for simplifying migrations, particularly for high-available systems.
+Idempotency is a powerful tool for simplifying migrations, particularly for high-available systems where downtime is a major concern.
 
-It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a risky choreography of producer and consumer switches, usually leading to downtimes.
+It allows for parallel processing, safe retries, gradual migrations, and more resilient rollbacks. Without it, migrations may require hard-switches, which involves a risky choreography of producer and consumer switches, usually leading to downtime.
 
-If you’re designing a high-available system today, bake idempotency in from the start and your future self will thank you when migrations inevitably arrive.
+If you’re designing a high-available system today, particularly when stronger consistency is required, bake idempotency in from the start and your future self will thank you when migrations inevitably arrive.

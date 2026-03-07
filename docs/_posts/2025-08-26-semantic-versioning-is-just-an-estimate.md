@@ -1,10 +1,10 @@
 ---
 title:  "Semantic Versioning is Just an Estimate"
-date:   2025-07-01 00:00:00 +0000
+date:   2025-08-26 00:00:00 +0000
 categories: software-engineering
 tags: software-engineering
 header:
-    og_image: /assets/2025-08-22-semantic-versioning-is-just-an-estimate.jpg
+    og_image: /assets/semantic-versioning-is-just-an-estimate.jpg
 ---
 
 Semantic Versioning became the industry standard for managing releases, following the pattern `MAJOR.MINOR.PATCH`:
