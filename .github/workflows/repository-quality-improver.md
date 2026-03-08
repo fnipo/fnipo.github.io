@@ -19,9 +19,13 @@ tools:
     toolsets:
       - default
 safe-outputs:
+  mentions: false
+  allowed-github-references: []
   create-issue:
+    title-prefix: "[quality-board] "
     expires: 2d
     labels: [quality, automated-analysis]
+    close-older-issues: true
     max: 1
 timeout-minutes: 20
 strict: true
@@ -52,6 +56,12 @@ Daily or on-demand:
    - a live board meeting simulation,
    - a tension/risk/alignment heatmap,
    - orchestrator coaching notes with concrete next steps.
+
+The GitHub issue is the primary deliverable.
+
+Treat this output as a **tracking issue with actionable recommendations**, not as a casual report or status update. The board review must end in concrete next steps, so it belongs in an issue.
+
+If the analysis succeeds, the workflow must create the issue. A plain-text answer without issue creation is failure.
 
 The goal is not generic “repo quality.” The goal is sharper thinking, stronger technical rigor, clearer explanations, better operational guidance, and a more credible engineering publication.
 
@@ -374,11 +384,21 @@ Simulate the following six-phase meeting model, adapted for a one-shot workflow:
 #### Phase 6: Decision Extraction
 - Extract the likely decisions, key objections, and next actions that a maintainer should confirm.
 
-## Phase 3: Output Format
+## Phase 3: Issue Body Format
 
-Your output must contain exactly three sections and nothing else.
+The GitHub issue body must contain exactly three sections and nothing else.
 
-Never speak to the maintainer outside these sections.
+This requirement applies to the `body` field passed to `create_issue`, not to any hidden tool protocol.
+
+Do not print the report as plain assistant prose.
+Put the full report into the GitHub issue body.
+
+Think of the workflow as having two layers:
+
+1. **Internal workflow/tool protocol** — invisible machinery used to emit safe outputs.
+2. **Published issue content** — the Markdown body visible in GitHub.
+
+The 3-part board analysis format applies to the **published issue content** only.
 
 ### PART 1 — Live Board Meeting Simulation
 
@@ -461,7 +481,122 @@ These recommendations must include:
 - follow-up expectations for the next board review,
 - 3–5 action items with suggested ownership.
 
-## Phase 4: Cache Memory Update
+### Required issue body skeleton
+
+Use this exact top-level structure inside the issue body:
+
+```markdown
+## PART 1 — Live Board Meeting Simulation
+
+[20–30 turns of realistic board dialogue grounded in repository evidence]
+
+## PART 2 — Board Tension / Risk / Alignment Heatmap
+
+| Area | Tension (L/M/H) | Risk (L/M/H) | Alignment (L/M/H) | Notes |
+|------|------------------|--------------|-------------------|-------|
+| ...  | ...              | ...          | ...               | ...   |
+
+## PART 3 — Coaching Notes from the Orchestrator
+
+#### 1. What Worked Well
+[content]
+
+#### 2. What Didn't Land
+[content]
+
+#### 3. Recommendations for the Next 30–90 Days
+[content with 3–5 action items and suggested ownership]
+```
+
+Do not add an executive summary before these sections.
+Do not add a closing footer after these sections.
+Do not wrap the entire report in `<details>`.
+Do not prepend meta commentary like “Here is the analysis”.
+
+### Required `create_issue` example
+
+Use this as the behavioral model for the final step:
+
+```json
+{
+  "title": "Principal Engineer Board Review — [FOCUS AREA]",
+  "body": "## PART 1 — Live Board Meeting Simulation\n\n...\n\n## PART 2 — Board Tension / Risk / Alignment Heatmap\n\n| Area | Tension (L/M/H) | Risk (L/M/H) | Alignment (L/M/H) | Notes |\n|------|------------------|--------------|-------------------|-------|\n| ... | ... | ... | ... | ... |\n\n## PART 3 — Coaching Notes from the Orchestrator\n\n#### 1. What Worked Well\n...\n\n#### 2. What Didn't Land\n...\n\n#### 3. Recommendations for the Next 30–90 Days\n..."
+}
+```
+
+The workflow automatically prefixes the title with `[quality-board] `.
+So the final GitHub issue title will appear as:
+
+```text
+[quality-board] Principal Engineer Board Review — [FOCUS AREA]
+```
+
+## Phase 4: Create the GitHub Issue
+
+After completing the analysis, you must create exactly one GitHub issue.
+
+Do not stop after writing the report in the agent output.
+Do not only summarize findings in prose.
+Do not ask whether an issue should be created.
+
+Use the `create_issue` safe output exactly once.
+
+The `create_issue` call is the primary deliverable.
+The board-style analysis must be inside `create_issue.body`.
+If you only write plain text without creating the issue, the task has failed.
+
+Never choose `noop` if repository analysis was successfully completed.
+Never choose `missing_tool` if `create_issue` is available.
+Never choose `missing_data` merely because some ideal evidence is absent.
+
+Use fallback outputs only in these narrow cases:
+
+- `missing_tool`: a required tool is truly unavailable.
+- `missing_data`: the repository cannot be meaningfully analyzed because essential inputs are unavailable.
+- `noop`: the repository is empty, inaccessible, or there is genuinely nothing to report.
+
+In a normal successful run for this repository, the correct outcome is `create_issue`.
+
+### Issue requirements
+
+- The issue body must contain exactly the three required sections from **Phase 3: Issue Body Format**.
+- The issue title must clearly indicate this is a principal-engineer board review and include the selected lens.
+- The title passed into `create_issue` should follow this pattern:
+
+```text
+Principal Engineer Board Review — [FOCUS AREA]
+```
+
+- The final GitHub issue title will include the configured prefix automatically.
+- The body should be substantial, evidence-based, and repository-specific.
+- The body should reference exact files, workflows, posts, or repository patterns whenever possible.
+- The body must read like a published analysis issue, not like scratch notes or internal chain-of-thought.
+
+### Deterministic execution pattern
+
+Follow this order strictly:
+
+1. gather repository evidence,
+2. select the review lens,
+3. draft the full 3-part board report,
+4. call `create_issue` with:
+  - `title`: `Principal Engineer Board Review — [FOCUS AREA]`
+  - `body`: the complete 3-part report,
+5. update cache memory.
+
+Do not substitute a narrative summary for step 4.
+Do not emit the report outside the issue body.
+Do not stop after step 3.
+
+### Final execution rule
+
+Your task is only complete when:
+
+1. the analysis has been performed,
+2. the report has been written in the required 3-part format, and
+3. the `create_issue` safe output has been emitted successfully.
+
+## Phase 5: Cache Memory Update
 
 After generating the report, update the focus area history:
 
@@ -485,6 +620,7 @@ A successful run:
 - ✅ simulates the board using the named personas above,
 - ✅ includes realistic disagreement and probing questions,
 - ✅ produces exactly one issue,
+- ✅ uses the `create_issue` safe output rather than only printing the report,
 - ✅ outputs exactly the three required sections,
 - ✅ generates 3–5 concrete action items,
 - ✅ updates cache memory with run history.
@@ -500,191 +636,3 @@ A successful run:
 - **Call out missing evidence** when the repo lacks metrics, diagrams, examples, or operational detail.
 - **Avoid imitation theater**: use personas as expert viewpoints, not celebrity impersonations.
 - **Respect timeout**: complete within 20 minutes.
-
-```bash
-# Directory structure
-find . -type d ! -path "./.git/*" ! -path "*/node_modules/*" ! -path "*/vendor/*" | head -20
-
-# File distribution by top-level directory
-for dir in src lib cmd pkg app; do
-  if [ -d "$dir" ]; then
-    echo "$dir: $(find "$dir" -type f | wc -l) files"
-  fi
-done
-```
-
-### Accessibility & Usability Analysis
-
-```bash
-# Check for inclusive language
-grep -ri "whitelist\|blacklist\|master\|slave" --include="*.md" . 2>/dev/null | grep -v ".git" | wc -l
-
-# README quality
-wc -l README.md 2>/dev/null || echo "No README.md found"
-
-# Check for CONTRIBUTING, CODE_OF_CONDUCT, etc.
-for f in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md CHANGELOG.md; do
-  [ -f "$f" ] && echo "✅ $f" || echo "❌ $f missing"
-done
-```
-
-### For Custom Focus Areas
-
-When you invent a custom focus area, **design appropriate analysis commands** tailored to that area. Consider:
-
-- What metrics would reveal the current state?
-- What files or patterns should be examined?
-- What would success look like in this area?
-
-**Example: "Error Message Clarity"**
-```bash
-# Find error messages across codebase
-grep -r "throw\|Error\|exception\|error(" \
-  --include="*.ts" --include="*.js" --include="*.py" \
-  . 2>/dev/null | grep -v "node_modules" | head -20
-```
-
-**Example: "Developer Onboarding Experience"**
-```bash
-# Check onboarding documentation
-find . -name "GETTING_STARTED*" -o -name "SETUP*" -o -name "QUICKSTART*" 2>/dev/null
-# Check if there's a dev container or codespaces config
-ls .devcontainer/ 2>/dev/null || echo "No devcontainer"
-cat .github/codespaces/devcontainer.json 2>/dev/null
-```
-
-**Example: "Contribution Friction"**
-```bash
-# Check PR template
-cat .github/pull_request_template.md 2>/dev/null
-# Check issue templates
-ls .github/ISSUE_TEMPLATE/ 2>/dev/null
-# Check CI feedback speed (look at workflow complexity)
-find .github/workflows -name "*.yml" -exec wc -l {} \; | sort -rn | head -5
-```
-
-## Phase 2: Generate Improvement Report
-
-Write a comprehensive report as a GitHub issue with the following structure:
-
-**Report Formatting**: Use h3 (###) or lower for all headers in the report to maintain proper document hierarchy. The issue title serves as h1, so start section headers at h3.
-
-```markdown
-### 🎯 Repository Quality Improvement Report — [FOCUS AREA]
-
-**Analysis Date**: [DATE]
-**Focus Area**: [SELECTED AREA]
-**Strategy Type**: [Custom/Standard/Reused]
-
-### Executive Summary
-
-[2–3 paragraphs summarizing the analysis findings and key recommendations]
-
-<details>
-<summary><b>Full Analysis Report</b></summary>
-
-### Focus Area: [AREA NAME]
-
-### Current State Assessment
-
-**Metrics Collected:**
-| Metric | Value | Status |
-|--------|-------|--------|
-| [Metric 1] | [Value] | ✅/⚠️/❌ |
-| [Metric 2] | [Value] | ✅/⚠️/❌ |
-
-### Findings
-
-#### Strengths
-- [Strength 1]
-- [Strength 2]
-
-#### Areas for Improvement
-- [Issue 1 with severity indicator]
-- [Issue 2 with severity indicator]
-
-</details>
-
----
-
-### 🤖 Suggested Improvement Tasks
-
-The following actionable tasks address the findings above.
-
-#### Task 1: [Short Description]
-
-**Priority**: High/Medium/Low
-**Estimated Effort**: Small/Medium/Large
-
-[Detailed description of what needs to be done, including specific files or patterns to change]
-
----
-
-#### Task 2: [Short Description]
-
-[Continue pattern for 3–5 total tasks]
-
----
-
-### 📊 Historical Context
-
-<details>
-<summary><b>Previous Focus Areas</b></summary>
-
-| Date | Focus Area | Type |
-|------|------------|------|
-| [Date] | [Area] | [Custom/Standard/Reused] |
-
-</details>
-
----
-
-### 🎯 Recommendations
-
-#### Immediate Actions (This Week)
-1. [Action 1] — Priority: High
-
-#### Short-term Actions (This Month)
-1. [Action 1] — Priority: Medium
-
----
-
-*Generated by Repository Quality Improvement Agent*
-*Next analysis: [Tomorrow's date] — Focus area selected based on diversity algorithm*
-```
-
-## Phase 3: Update Cache Memory
-
-After generating the report, update the focus area history:
-
-```bash
-mkdir -p /tmp/gh-aw/cache-memory/focus-areas/
-# Write updated history.json with the new run appended
-```
-
-The JSON should include:
-- All previous runs (preserve existing history)
-- The new run: date, focus_area, custom (true/false), description, tasks_generated
-- Updated `recent_areas` (last 5)
-- Updated statistics (total_runs, custom_rate, unique_areas_explored)
-
-## Success Criteria
-
-A successful quality improvement run:
-- ✅ Selects a focus area using the diversity algorithm (60% custom, 30% standard, 10% reuse)
-- ✅ Determines the repository's primary language(s) and adapts analysis accordingly
-- ✅ Conducts thorough analysis of the selected area
-- ✅ Generates exactly one issue with the report
-- ✅ Includes 3–5 actionable tasks
-- ✅ Updates cache memory with run history
-- ✅ Maintains high diversity rate (aim for 60%+ custom or varied strategies)
-
-## Important Guidelines
-
-- **Prioritize Custom Areas**: 60% of runs should invent new, repository-specific focus areas
-- **Avoid Repetition**: Don't select the same area in consecutive runs
-- **Be Creative**: Think beyond the standard categories — what unique aspects of this project need attention?
-- **Be Thorough**: Collect relevant metrics and perform meaningful analysis
-- **Be Specific**: Provide exact file paths, line numbers, and code examples where relevant
-- **Be Actionable**: Every finding should lead to a concrete task
-- **Respect Timeout**: Complete within 20 minutes
