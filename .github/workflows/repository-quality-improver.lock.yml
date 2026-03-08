@@ -21,11 +21,11 @@
 #
 # For more information: https://github.github.com/gh-aw/introduction/overview/
 #
-# Daily analysis of repository quality focusing on a different software development lifecycle area each run
+# Daily principal-engineer board review of the repository's technical rigor, editorial quality, and platform readiness
 #
 # Source: githubnext/agentics/workflows/repository-quality-improver.md@e9d60822329eb50a32fcfc54ebd68078e4f5133e
 #
-# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"d2f23c5a44dfd77e688ddec30d4d5ec76c99c24b7c621e5c77befb17fe690d7b","compiler_version":"v0.55.0","strict":true}
+# gh-aw-metadata: {"schema_version":"v2","frontmatter_hash":"3a56cd113c2a3110c44f39cea004abd64c29b802821bdfce0b7d83a9258c904c","compiler_version":"v0.55.0","strict":true}
 
 name: "Repository Quality Improver"
 "on":
@@ -891,7 +891,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           WORKFLOW_NAME: "Repository Quality Improver"
-          WORKFLOW_DESCRIPTION: "Daily analysis of repository quality focusing on a different software development lifecycle area each run"
+          WORKFLOW_DESCRIPTION: "Daily principal-engineer board review of the repository's technical rigor, editorial quality, and platform readiness"
           HAS_PATCH: ${{ steps.collect_output.outputs.has_patch }}
         with:
           script: |
