@@ -4,11 +4,7 @@ description: Daily principal-engineer board review of the repository's technical
 on:
   schedule: daily on weekdays
   workflow_dispatch:
-permissions:
-  contents: read
-  actions: read
-  issues: read
-  pull-requests: read
+permissions: read-all
 engine: copilot
 tools:
   bash: ["*"]
@@ -23,9 +19,13 @@ safe-outputs:
   allowed-github-references: []
   create-issue:
     title-prefix: "[quality-board] "
-    expires: 2d
     labels: [quality, automated-analysis]
-    close-older-issues: true
+    max: 1
+  create-pull-request:
+    title-prefix: "[quality-improvement] "
+    labels: [quality, content-improvement, automated-analysis]
+    draft: false
+    if-no-changes: "warn"
     max: 1
 timeout-minutes: 20
 strict: true
@@ -45,23 +45,54 @@ Simulate a serious board-room review, not a cheerful bot summary.
 
 Use named personas as analytical lenses inspired by their publicly known areas of expertise. Do not claim endorsement, direct involvement, or real quotations from any person. Never fabricate that these people actually reviewed the repo. This is a simulation grounded in repository evidence.
 
+## Primary Workflow Contract
+
+Follow this minimal success path before anything else:
+
+1. inspect the repository and current open tracking work,
+2. choose one review lens,
+3. generate the full board-style analysis,
+4. avoid duplicates by checking open issues and open PRs,
+5. create exactly one GitHub issue using `create_issue` only if the analysis is not already tracked,
+6. optionally create at most one content-improvement PR using `create_pull_request` when a focused, low-risk improvement is justified and not already in progress,
+7. put the complete board analysis in `create_issue.body` when an issue is created.
+
+If the run creates the right new tracking artifact, or correctly decides that the work is already tracked, the workflow is successful.
+
+This workflow is not complete when you only think, summarize, or draft.
+This workflow is complete only when it has either:
+- emitted the correct safe outputs for new tracking work, or
+- intentionally emitted `noop` because the relevant work is already tracked and there is nothing material to add.
+
+Treat any more detailed instructions later in this file as constraints on the content of the issue and any optional PR, not as permission to skip duplicate detection.
+
 ## Mission
 
 Daily or on-demand:
 
 1. Select a review lens for the board meeting.
 2. Analyze the repository as a technical writing and engineering-education asset.
-3. Simulate a realistic board discussion among expert personas.
-4. Produce exactly one GitHub issue containing:
+3. Inspect open issues and open PRs so you do not duplicate existing tracked work.
+4. Simulate a realistic board discussion among expert personas.
+5. If the analysis is new, produce exactly one GitHub issue containing:
    - a live board meeting simulation,
    - a tension/risk/alignment heatmap,
    - orchestrator coaching notes with concrete next steps.
+6. If the board identifies a focused, low-risk technical-content improvement that is not already being worked on, optionally create at most one PR to improve the content.
 
 The GitHub issue is the primary deliverable.
 
 Treat this output as a **tracking issue with actionable recommendations**, not as a casual report or status update. The board review must end in concrete next steps, so it belongs in an issue.
 
-If the analysis succeeds, the workflow must create the issue. A plain-text answer without issue creation is failure.
+If the analysis succeeds and the work is not already tracked, the workflow must create the issue. A plain-text answer without issue creation is failure.
+
+If the work is already tracked by an open issue or open PR, do not create a duplicate issue.
+
+PRs are optional secondary deliverables. They should only be created when the improvement is concrete, low-risk, content-only, and not already represented by an open PR.
+
+Even if any tool description generically suggests that reports might belong elsewhere, for this workflow the correct output is still a GitHub issue because the result is intended to be a tracked board review with concrete follow-up actions.
+
+PRs created by this workflow must never be merged automatically. They are for human review and human merge only.
 
 The goal is not generic “repo quality.” The goal is sharper thinking, stronger technical rigor, clearer explanations, better operational guidance, and a more credible engineering publication.
 
@@ -148,6 +179,33 @@ This repository is content-first, so default toward lenses that inspect article 
 - Never choose the exact same lens in consecutive runs
 - Update the history file with the selected lens, whether it was custom, and a brief description
 
+### Default behavior when selection is imperfect
+
+Do not let lens selection block the workflow.
+
+If history is missing, incomplete, or ambiguous:
+- choose the strongest obvious lens from repository evidence,
+- prefer `Technical Rigor`, `Editorial Clarity`, or a closely related custom lens,
+- continue immediately with analysis.
+
+Perfect diversity management is secondary.
+Creating the issue with a strong board review is primary.
+
+### 0.3 Inspect Open Tracking Work
+
+Before creating any new issue or PR, inspect existing open issues and open PRs in the repository.
+
+Specifically look for:
+- open issues that already track the same improvement,
+- open PRs that already implement the same recommendation,
+- prior board-review issues that already cover the same target files and same maintainer action,
+- content-improvement PRs already touching the same article or diagram for the same reason.
+
+Do not rely on title matching alone.
+Read enough issue and PR context to judge whether the same concrete improvement is already being tracked.
+
+If an open issue or PR already covers the same recommendation, do not duplicate it.
+
 ## Phase 1: Conduct Analysis
 
 First, determine the repository's real center of gravity. Do not assume a code-heavy project.
@@ -227,6 +285,8 @@ Based on the selected lens, inspect the most relevant files in depth. Prioritize
 - GitHub Actions workflows,
 - diagrams and architecture artifacts,
 - recent issues, PRs, and commit messages when available.
+
+Use open issues and PRs not only as evidence sources, but also as duplicate-detection inputs.
 
 If the repo has little executable code, do not pad the analysis with generic code-quality commentary. Focus on what matters here: content accuracy, explanatory power, production realism, operational credibility, and publication quality.
 
@@ -363,6 +423,7 @@ Simulate the following six-phase meeting model, adapted for a one-shot workflow:
 - Pull context from the repository itself: recent commits, issues, PRs, workflows, posts, docs, config.
 - Use only evidence available in the repo or GitHub metadata.
 - If information is missing, say so bluntly.
+- Explicitly check whether the likely recommendations are already tracked in open issues or open PRs.
 
 #### Phase 2: Agent Contributions (Sequential, Independent)
 - Each non-Critic persona first gives an independent view.
@@ -383,6 +444,36 @@ Simulate the following six-phase meeting model, adapted for a one-shot workflow:
 
 #### Phase 6: Decision Extraction
 - Extract the likely decisions, key objections, and next actions that a maintainer should confirm.
+
+### 2.5 Execution Priority
+
+The board simulation is a method for generating the issue body.
+It is not permission to delay or skip issue creation.
+
+When trade-offs arise, prioritize in this order:
+
+1. avoid duplicating existing tracked work,
+2. create the correct new tracking artifact when needed,
+3. keep the required issue body structure,
+4. ground the content in repository evidence,
+5. preserve rich board-style realism.
+
+If realism and perfect flow conflict with completion, choose completion while keeping the board voice intact.
+
+## Phase 2.6: Duplicate Detection Rules
+
+Treat work as already tracked when an open issue or open PR clearly covers:
+- the same target article, diagram, or content surface,
+- the same core problem statement,
+- the same intended maintainer action.
+
+Do **not** treat work as duplicate merely because:
+- it uses the same review lens,
+- it discusses the same broad topic,
+- it mentions the same technology but addresses a different concrete change.
+
+When an open PR already implements the same improvement, prefer not creating a new issue or PR.
+When an open issue already tracks the same improvement but no PR exists yet, you may still create a PR if the change is focused, content-only, and clearly linked back to that existing issue.
 
 ## Phase 3: Issue Body Format
 
@@ -533,7 +624,7 @@ So the final GitHub issue title will appear as:
 
 ## Phase 4: Create the GitHub Issue
 
-After completing the analysis, you must create exactly one GitHub issue.
+After completing the analysis, create exactly one GitHub issue only when the board's recommendation set is not already tracked by an open issue or open PR.
 
 Do not stop after writing the report in the agent output.
 Do not only summarize findings in prose.
@@ -545,17 +636,17 @@ The `create_issue` call is the primary deliverable.
 The board-style analysis must be inside `create_issue.body`.
 If you only write plain text without creating the issue, the task has failed.
 
-Never choose `noop` if repository analysis was successfully completed.
-Never choose `missing_tool` if `create_issue` is available.
+Never choose `noop` if repository analysis found a materially new, untracked improvement.
+Never choose `missing_tool` if `create_issue` or `create_pull_request` is available.
 Never choose `missing_data` merely because some ideal evidence is absent.
 
 Use fallback outputs only in these narrow cases:
 
 - `missing_tool`: a required tool is truly unavailable.
 - `missing_data`: the repository cannot be meaningfully analyzed because essential inputs are unavailable.
-- `noop`: the repository is empty, inaccessible, or there is genuinely nothing to report.
+- `noop`: the repository is empty, inaccessible, or the relevant improvement is already tracked by an open issue or PR and there is nothing materially new to add.
 
-In a normal successful run for this repository, the correct outcome is `create_issue`.
+In a normal successful run for this repository, the correct outcome is `create_issue`, optionally followed by `create_pull_request` when appropriate.
 
 ### Issue requirements
 
@@ -572,29 +663,76 @@ Principal Engineer Board Review — [FOCUS AREA]
 - The body should reference exact files, workflows, posts, or repository patterns whenever possible.
 - The body must read like a published analysis issue, not like scratch notes or internal chain-of-thought.
 
+If you detect an existing open issue that already tracks the same improvement, do not create a duplicate issue.
+
 ### Deterministic execution pattern
 
 Follow this order strictly:
 
 1. gather repository evidence,
-2. select the review lens,
-3. draft the full 3-part board report,
-4. call `create_issue` with:
-  - `title`: `Principal Engineer Board Review — [FOCUS AREA]`
-  - `body`: the complete 3-part report,
-5. update cache memory.
+2. inspect open issues and open PRs for duplicates,
+3. select the review lens,
+4. draft the full 3-part board report,
+5. if the improvement is not already tracked, call `create_issue` with:
+   - `title`: `Principal Engineer Board Review — [FOCUS AREA]`
+   - `body`: the complete 3-part report,
+6. if a focused, low-risk content improvement is justified and not already in progress, optionally create at most one PR,
+7. update cache memory.
 
 Do not substitute a narrative summary for step 4.
 Do not emit the report outside the issue body.
 Do not stop after step 3.
+
+## Phase 4.1: Optional Content-Improvement PR
+
+After the board analysis, investigate whether the recommendations justify an immediate content improvement PR.
+
+Only create a PR when all of the following are true:
+- the change is small, surgical, and low-risk,
+- the benefit is clear from the board analysis,
+- the target is limited to technical content,
+- no equivalent open PR already exists,
+- the change does **not** require workflow, configuration, or code changes.
+
+Allowed edit scope for PRs:
+- `docs/_posts/**`
+- diagram or architecture assets that directly support those posts
+
+Forbidden PR scope:
+- `.github/**`
+- build or deployment workflows
+- Jekyll configuration
+- Ruby, JavaScript, or other code/config changes outside content support assets
+
+If the best improvement would require forbidden scope, keep it in the issue only.
+
+### PR requirements
+
+- Create **at most one PR per run**.
+- The PR must be for human review only.
+- Never merge automatically.
+- Keep the PR focused to one coherent improvement.
+- The PR title should describe the content improvement clearly.
+- The PR body should explain:
+  - what was improved,
+  - which board recommendation it implements,
+  - what files were changed,
+  - what still requires human editorial judgment.
+
+### PR linking rules
+
+- If an existing open issue already tracks the improvement, explicitly reference that issue in the PR body.
+- If there is already an open PR implementing the same improvement, do not create another PR.
+- If a brand-new issue was created in this same run but you cannot deterministically reference it in the PR body, prefer issue-only output for this run rather than creating an ambiguously linked PR.
 
 ### Final execution rule
 
 Your task is only complete when:
 
 1. the analysis has been performed,
-2. the report has been written in the required 3-part format, and
-3. the `create_issue` safe output has been emitted successfully.
+2. duplicate detection has been performed against open issues and PRs,
+3. the correct safe outputs have been emitted for this run,
+4. any optional PR respects the content-only and human-review-only rules.
 
 ## Phase 5: Cache Memory Update
 
@@ -608,6 +746,7 @@ mkdir -p /tmp/gh-aw/cache-memory/focus-areas/
 The JSON should include:
 - all previous runs,
 - the new run: `date`, `focus_area`, `custom`, `description`, `tasks_generated`, `strongest_objections`,
+- a `tracked_items` section recording known issue/PR fingerprints, targets, and states when available,
 - updated `recent_areas` (last 5),
 - updated statistics (`total_runs`, `custom_rate`, `reuse_rate`, `unique_areas_explored`).
 
@@ -619,8 +758,10 @@ A successful run:
 - ✅ grounds analysis in real repository artifacts,
 - ✅ simulates the board using the named personas above,
 - ✅ includes realistic disagreement and probing questions,
-- ✅ produces exactly one issue,
-- ✅ uses the `create_issue` safe output rather than only printing the report,
+- ✅ does not duplicate already tracked issues or PRs,
+- ✅ produces the correct issue outcome when a new tracking issue is needed,
+- ✅ optionally creates at most one focused PR when justified,
+- ✅ uses `create_issue` and `create_pull_request` safe outputs rather than only printing the report,
 - ✅ outputs exactly the three required sections,
 - ✅ generates 3–5 concrete action items,
 - ✅ updates cache memory with run history.
@@ -632,6 +773,10 @@ A successful run:
 - **Prefer repository-specific lenses**: this repo is unusual because the product is thinking, writing, and technical explanation.
 - **Focus on principal-engineer concerns**: correctness, trade-offs, failure modes, maintainability, observability, security, and clarity.
 - **Do not over-index on code metrics** if the code footprint is small.
+- **Avoid duplicate work**: inspect open issues and PRs before creating new ones.
+- **Keep PRs surgical**: one focused content improvement at a time.
+- **PRs are human-reviewed only**: never merge automatically.
+- **Stay within allowed edit scope** for PRs.
 - **Name exact files, posts, workflows, or patterns** whenever possible.
 - **Call out missing evidence** when the repo lacks metrics, diagrams, examples, or operational detail.
 - **Avoid imitation theater**: use personas as expert viewpoints, not celebrity impersonations.
