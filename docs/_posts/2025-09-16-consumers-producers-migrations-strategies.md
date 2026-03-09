@@ -470,7 +470,41 @@ The steps for this typically looks like this:
 
 Without idempotency, consumers must perform a hard switch. The challenge is ensuring the new consumer group starts processing from the equivalent offset of the old group, without reprocessing or skipping messages.
 
-Read more in the Hard Switches post (coming soon...).
+#### What Is a Hard Switch?
+
+A hard switch is a coordinated cutover where an old consumer group stops consuming, the new consumer group starts from the same position, and producers then switch to the new topic (or contract version). Unlike idempotent-based migrations that allow parallel consumption, a hard switch requires a moment of synchronization—no messages are processed by either group during the transition.
+
+The steps are:
+
+1. **Freeze the old consumer**: Stop all instances of the old consumer group. Wait for all in-flight message processing to complete.
+2. **Capture the position**: Record the current committed offset for each partition of the old consumer group.
+3. **Initialize the new consumer**: Create the new consumer group and manually set its starting offset to match the old group's final position using administrative APIs (e.g., Kafka `ConsumerGroupOffset` reset tooling).
+4. **Resume consuming**: Start the new consumer group. It begins from the recorded offset, avoiding reprocessing and message loss.
+5. **Switch producers** (if changing topics/versions): Update producers to target the new contract version or topic.
+
+#### Risks and Observable Signals
+
+**Offset alignment failures**: If offsets are misaligned, the new consumer either skips messages (data loss) or reprocesses (duplicates). Always verify offset capture before resuming.
+
+**Leader election during the switch**: If a broker fails during the freeze window, partition leaders may change, invalidating captured offsets. Ensure cluster stability before switching.
+
+**Message ordering guarantees**: If consumer instances are deployed with rolling updates during the switch, temporary parallel running can reproduce the multi-consumer group scenario, breaking ordering guarantees within partitions. Ensure all old instances are fully stopped before starting new ones.
+
+**What to monitor**:
+- Consumer lag before freezing (should be near zero)
+- Offset mismatch between captured and new consumer start position
+- First message processed by the new consumer (should match the first message *after* the old group's final offset)
+- Any reprocessing or skipped messages in business metrics (orders, events)
+
+#### When Hard Switches Are Risky
+
+Hard switches are inherently riskier than idempotent migrations because they require precise timing and manual coordination. They're also unavoidable when consumers cannot be made idempotent (e.g., external or legacy systems). In these cases, prefer:
+- **Extensive testing** in staging environments with realistic load and failure injection
+- **Narrow switch windows** (e.g., low-traffic periods)
+- **Practiced rollback procedures** to quickly revert if issues arise
+- **Comprehensive observability** to detect alignment failures immediately
+
+For mission-critical systems, consider baking idempotency into new consumers from the start to avoid hard switches entirely in future migrations.
 
 # Rollbacks
 
