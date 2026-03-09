@@ -468,9 +468,123 @@ The steps for this typically looks like this:
 
 ### When Consumers Aren't Idempotent
 
-Without idempotency, consumers must perform a hard switch. The challenge is ensuring the new consumer group starts processing from the equivalent offset of the old group, without reprocessing or skipping messages.
+Without idempotency, consumers must perform a hard switch. A hard switch is a synchronized cutover where the old consumer group stops consuming, and the new consumer group starts consuming from an equivalent offset, ensuring no messages are skipped or reprocessed.
 
-Read more in the Hard Switches post (coming soon...).
+#### Hard Switch Mechanics
+
+The challenge in a hard switch is determining the *equivalent offset* — the position in the new topic from which the new consumer group should begin, such that the set of messages it processes corresponds logically to where the old consumer left off.
+
+**Step 1: Align on the Safe Cutover Point**
+
+Before switching:
+1. Monitor the old consumer group to find its current lag (the distance between the latest offset and the last consumed offset).
+2. Ensure the lag is near zero, meaning the consumer has caught up with all available messages. This minimizes the window of unprocessed messages.
+3. Record the last consumed offset for each partition of the old topic (e.g., partition 0 stopped at offset 1050, partition 1 at offset 2310).
+
+**Step 2: Map Offsets to the New Topic (If Different Topic)**
+
+If the migration moves messages to a new topic, you must establish the offset mapping:
+- If the new topic was created *alongside* the old one and both have been receiving messages in parallel (a parallel-write migration), the new topic's offset may differ because producers wrote to it at a different rate or started at a different time.
+- The safest approach is to use a **logical identifier** (e.g., order ID as partition key) rather than relying on Kafka offsets, since offset numbers are topic-specific and meaningless across topics.
+- For each message consumed by the old group, identify the corresponding message in the new topic by its logical key and verify it exists.
+- Find the offset in the new topic just *after* the last matched message for each partition. This becomes the starting offset for the new group.
+
+For example:
+- Old topic, partition 0: last consumed message has order ID 50001 at offset 1050.
+- New topic, partition 0: the message with order ID 50001 is at offset 890.
+- New consumer group should start at offset 891 in the new topic.
+
+**Step 3: Pause the Old Consumer and Confirm Stable State**
+
+1. Stop the old consumer group gracefully, allowing in-flight messages to finish processing.
+2. Wait for any pending async operations (e.g., side effects, acknowledgments) to complete.
+3. Wait for the old group's session timeout to expire so Kafka rebalances cleanly.
+4. Verify once more that the last consumed offsets haven't changed during this window.
+
+**Step 4: Initialize the New Consumer Group at the Calculated Offset**
+
+1. Create or reconfigure the new consumer group (if it doesn't already exist).
+2. Assign partitions and set the starting offset to the calculated values using `seekToBeginning()`, `seek()`, or equivalent APIs.
+3. For Kafka, this might involve:
+   - Using a consumer assignment API to manually assign partitions: `consumer.assign(partitions)`.
+   - Using `consumer.seek(topicPartition, offset)` to position at the mapped offset.
+   - Confirming the group is in `STABLE` state before processing resumes.
+
+**Step 5: Resume Processing and Monitor**
+
+1. Start the new consumer group.
+2. Monitor the first few messages consumed by the new group to confirm they are the expected next messages (no gaps, no repeats).
+3. Monitor latency, error rates, and any consumer lag spikes to detect misalignment.
+4. Watch for DLQ or exception logs to catch poison messages or deserialization failures due to schema mismatches.
+
+#### ⚠️ Caveats: Why Hard Switches Are Risky
+
+**Downtime and Coordination Burden**
+
+A hard switch requires stopping one consumer group and starting another at precisely the right moment. This coordination window introduces downtime: no messages are processed while the old group is offline and the new group is initializing. For high-volume systems, even a 30-second delay can mean thousands of unprocessed events.
+
+**Offset Mapping Errors**
+
+If the offset mapping is incorrect — especially when migrating across topics — the new group may skip messages or reprocess old ones:
+- **Skipped messages**: The new group starts at an offset that is *too far ahead*, leaving messages unprocessed. These may never be recovered unless the topic is replayed from the beginning.
+- **Reprocessed messages**: The new group starts at an offset that is *too far behind*, causing duplicate processing. Without idempotency on the producer or consumer side, this risks data corruption or duplicate side effects (e.g., duplicate charges, duplicate shipments).
+
+**Window Between Old and New Topics**
+
+If using parallel-write migration (writing to both old and new topics during cutover), messages produced *after* the cutover point but not yet consumed by the old group will be lost unless the new topic also started receiving those messages. Timing is critical.
+
+**Message Loss in Edge Cases**
+
+If the old consumer crashes during the hard switch (after pausing, before the offset is confirmed), or if the calculated offset is wrong due to log compaction or retention policy violations, messages may be permanently lost.
+
+**Schema and Compatibility Assumptions**
+
+The hard switch assumes the new consumer can deserialize and process messages from the new topic using the same logic as the old consumer, or with compatible upgrades. If the schema of the new topic diverges significantly, the new consumer may fail on the first message, triggering a rollback.
+
+#### Example: Migrating Without Idempotency
+
+Consider a payment service consuming `PaymentProcessed` messages:
+
+**Old Setup:**
+- Topic: `payments-v1`
+- Partition 0: last consumed offset is 5000.
+- Consumer group: `payment-service-consumer`.
+- Last message: `{"txn_id": "TX-99999", "amount": 100}` at offset 5000.
+
+**New Setup (parallel write started 1 hour ago):**
+- Topic: `payments-v2`
+- Producer now writes to both `payments-v1` and `payments-v2`.
+- New consumer group: `payment-service-consumer-v2` (does not exist yet).
+
+**Hard Switch Plan:**
+
+1. **Offset discovery**: Scan the last 50 messages from `payments-v1` to find `TX-99999`. It's at offset 5000. Search `payments-v2` for the same `txn_id`. Found at offset 4200.
+2. **Pause old consumer**: Set `payments-v1` consumer to NOT consume any new messages. Wait 30 seconds for in-flight messages to complete.
+3. **Verify**: Confirm `payments-v1` last offset is still 5000 (no new messages arrived).
+4. **Initialize new consumer**: Assign `payments-v2` to `payment-service-consumer-v2` and seek to offset 4201.
+5. **Start**: Resume processing from the new topic.
+6. **Verify**: The first message consumed from `payments-v2` should be `TX-100000` or the next transaction after `TX-99999`. Log it.
+7. **Monitor**: Watch for skipped transaction IDs in logs (indicates offset mapping was wrong).
+
+If this window takes longer than expected, messages produced after the pause may only go to `payments-v2` while `payments-v1` is dormant, causing a gap in the old topic that the old consumer never sees.
+
+#### Recommendations
+
+**Prefer Idempotency**
+
+If possible, implement idempotency (e.g., using a transaction ID or message deduplication key) on the consumer side or use an external deduplication store. This allows for graceful parallel processing and eliminates the need for hard switches.
+
+**Use Offset Management Tooling**
+
+If a hard switch is unavoidable, use offset management tools (e.g., Kafka's offset reset tools, or custom tooling) to programmatically calculate and verify offset mappings before cutover. Never do this manually.
+
+**Shorter Migration Windows**
+
+Plan hard switches during low-traffic periods to minimize the window of potential misalignment and reduce the operational impact of downtime.
+
+**Automated Rollback**
+
+Before executing a hard switch, have an automated rollback plan that can restore the old consumer group from saved offset state if the new group encounters errors within the first few minutes.
 
 # Rollbacks
 
