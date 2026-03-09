@@ -51,12 +51,13 @@ Follow this minimal success path before anything else:
 
 1. inspect the repository and current open tracking work,
 2. choose one review lens,
-3. generate the full board-style analysis,
-4. classify findings into `PR-eligible now`, `issue-only`, or `blocked by scope/runtime`,
+3. classify findings into `PR-eligible now`, `issue-only`, or `blocked by scope/runtime`,
+4. choose exactly one best PR candidate in `docs/_posts/**` when any safe post-level edit exists,
 5. avoid duplicates by checking open issues and open PRs,
-6. create exactly one GitHub issue using `create_issue` only if the analysis is not already tracked,
-7. actively try to create at most one content-improvement PR using `create_pull_request` when any focused, low-risk post-level improvement is available and not already in progress,
-8. put the complete board analysis in `create_issue.body` when an issue is created.
+6. implement that one best PR candidate and create at most one content-improvement PR using `create_pull_request` when it is not already being implemented by an open PR,
+7. generate the full board-style analysis,
+8. create exactly one GitHub issue using `create_issue` only for materially new backlog that is not already tracked and not already implemented in the PR,
+9. put the complete board analysis in `create_issue.body` when an issue is created.
 
 If the run creates the right new tracking artifact, or correctly decides that the work is already tracked, the workflow is successful.
 
@@ -65,7 +66,7 @@ This workflow is complete only when it has either:
 - emitted the correct safe outputs for new tracking work, or
 - intentionally emitted `noop` because the relevant work is already tracked and there is nothing material to add.
 
-Treat any more detailed instructions later in this file as constraints on the content of the issue and PR, not as permission to skip duplicate detection or skip a safe in-scope PR.
+Treat any more detailed instructions later in this file as constraints on the content of the issue and PR, not as permission to skip duplicate detection, skip a safe in-scope PR, or stop after issue creation when an article edit is available.
 
 ## Mission
 
@@ -75,25 +76,27 @@ Daily or on-demand:
 2. Analyze the repository as a technical writing and engineering-education asset.
 3. Inspect open issues and open PRs so you do not duplicate existing tracked work.
 4. Simulate a realistic board discussion among expert personas.
-5. If the analysis is new, produce exactly one GitHub issue containing:
+5. If the board reveals a safe, concrete article improvement, actively prefer implementing one focused PR in the same run.
+6. If the analysis leaves materially new backlog that is not already tracked, produce exactly one GitHub issue containing:
    - a live board meeting simulation,
    - a tension/risk/alignment heatmap,
    - orchestrator coaching notes with concrete next steps.
-6. If the board identifies any focused, low-risk technical-content improvement that is not already being worked on, actively prefer creating at most one PR to improve the content in the same run.
 
-The GitHub issue is the primary deliverable.
+The preferred deliverable is one focused post-level PR whenever a safe article edit exists.
+The GitHub issue is the backlog/tracking deliverable for the remaining materially new work.
 
 Treat this output as a **tracking issue with actionable recommendations**, not as a casual report or status update. The board review must end in concrete next steps, so it belongs in an issue.
 
-If the analysis succeeds and the work is not already tracked, the workflow must create the issue. A plain-text answer without issue creation is failure.
+If the analysis succeeds and there is materially new backlog that is not already tracked, the workflow must create the issue. A plain-text answer without safe outputs is failure.
 
 If the work is already tracked by an open issue or open PR, do not create a duplicate issue.
 
 If some recommendations are already tracked but others are new, drop the already-tracked recommendations and continue only with the new ones.
 
-PRs are expected follow-up deliverables whenever the analysis yields at least one concrete, low-risk, content-only edit that is not already represented by an open PR.
+PRs are expected primary implementation deliverables whenever the analysis yields at least one concrete, low-risk, content-only edit that is not already represented by an open PR.
 
 Do not treat successful issue creation as the natural stopping point if there is a safe post-level edit available.
+An existing open issue that tracks the broader theme does **not** block creating one focused PR that implements part of that backlog.
 
 Even if any tool description generically suggests that reports might belong elsewhere, for this workflow the correct output is still a GitHub issue because the result is intended to be a tracked board review with concrete follow-up actions.
 
@@ -108,13 +111,13 @@ The goal is not generic “repo quality.” The goal is sharper thinking, strong
 - **Cache Location**: `/tmp/gh-aw/cache-memory/focus-areas/`
 - **Repository Type**: Jekyll-based technical blog with GitHub Actions automation
 - **Primary Assets**: blog posts, diagrams, repo docs, Jekyll config, workflows
-- **Strategy Distribution**: ~60% custom review lenses, ~30% standard lenses, ~10% reuse for continuity
+- **Operating Mode**: persistent backlog improver with board-style analysis
 
 ## Phase 0: Setup and Focus Area Selection
 
-### 0.1 Load Review History
+### 0.1 Load Persistent Backlog Memory
 
-Check the cache memory folder `/tmp/gh-aw/cache-memory/focus-areas/` for previous review selections:
+Check the cache memory folder `/tmp/gh-aw/cache-memory/focus-areas/` for persistent state from previous runs:
 
 ```bash
 if [ -f /tmp/gh-aw/cache-memory/focus-areas/history.json ]; then
@@ -122,15 +125,40 @@ if [ -f /tmp/gh-aw/cache-memory/focus-areas/history.json ]; then
 fi
 ```
 
-The history file should contain:
+The state file should contain enough information for this workflow to make steady forward progress instead of rediscovering the same ideas each run.
+
+It should contain at least:
+
 ```json
 {
+  "backlog_cursor": {
+    "article_index": 2,
+    "last_article": "docs/_posts/2024-09-16-merging-message-types-in-a-kafka-topic.md",
+    "last_task_type": "missing-caveat",
+    "last_run": "2026-03-09"
+  },
+  "article_backlog": [
+    {
+      "path": "docs/_posts/2022-06-17-solving-dual-writes-with-cdc-and-the-outbox-pattern.md",
+      "status": "in-progress",
+      "last_suggestions": ["implementation-scaffolding", "wal-decoding-caveat"],
+      "last_pr": 11
+    }
+  ],
+  "tracked_items": [
+    {
+      "fingerprint": "cdc-post-implementation-scaffolding",
+      "type": "issue",
+      "state": "open",
+      "number": 12
+    }
+  ],
   "runs": [
     {
-      "date": "2024-01-15",
-      "focus_area": "technical-rigor-of-published-content",
+      "date": "2026-03-09",
+      "focus_area": "migration-cutover-caveats",
       "custom": false,
-      "description": "Board review of technical correctness, edge cases, and missing caveats in published posts"
+      "description": "Added a focused migration-caveat improvement to one article and left broader backlog in an issue"
     }
   ],
   "recent_areas": ["technical-rigor", "editorial-clarity", "operability", "portfolio-gaps", "workflow-hygiene"],
@@ -143,15 +171,19 @@ The history file should contain:
 }
 ```
 
+Read memory at the **start** of every run and update it at the **end**.
+Memory is helpful but not authoritative. Always verify it against current open issues, open PRs, and current repository contents before acting.
+
 ### 0.2 Select Review Lens
 
-Choose a review lens based on the following strategy to maximize diversity and repository-specific insight.
+Choose a review lens based first on the current backlog target, not on randomness.
 
 This repository is content-first, so default toward lenses that inspect article quality, technical depth, operational realism, architecture clarity, and reader trust.
 
-**Strategy Options**
+**Backlog-first selection policy**
 
-1. **Create a Custom Lens (60% of the time)** — Invent a repository-specific board topic such as:
+1. **Use the backlog target first** — If memory identifies an article or unresolved improvement area, derive the review lens from that target.
+2. **Create a Custom Lens when no backlog target is active** — Invent a repository-specific board topic such as:
    - misleading confidence in distributed-systems explanations,
    - missing production caveats,
    - observability blind spots in architectural examples,
@@ -160,9 +192,7 @@ This repository is content-first, so default toward lenses that inspect article 
    - content portfolio imbalance,
    - operations burden implied by the advice.
 
-2. **Use a Standard Lens (30% of the time)** — Select from established areas listed below.
-
-3. **Reuse a Previous Lens (10% of the time)** — Revisit the most important unresolved lens from recent runs for continuity.
+3. **Use a Standard Lens** — Select from established areas listed below only when no stronger backlog-driven lens is obvious.
 
 **Available Standard Lenses**
 1. **Technical Rigor**: correctness, trade-offs, edge cases, caveats, production realism
@@ -177,12 +207,12 @@ This repository is content-first, so default toward lenses that inspect article 
 10. **Examples & Diagrams**: concreteness, production applicability, diagram usefulness, ambiguity risk
 
 **Selection Algorithm**
-- Generate a random number between 0 and 100
-- **If number ≤ 60**: Invent a custom review lens specific to this repository's content and platform
-- **Else if number ≤ 90**: Select a standard lens that has not been used in the last 3 runs
-- **Else**: Reuse the most impactful unresolved lens from the last 10 runs
-- Never choose the exact same lens in consecutive runs
-- Update the history file with the selected lens, whether it was custom, and a brief description
+- First, identify the next backlog target from memory and current repo state.
+- If a target article or unresolved suggestion exists, derive the lens from that target.
+- Only fall back to a custom or standard lens when there is no strong backlog target.
+- Reuse the same lens across consecutive runs when that is the best way to finish an unresolved backlog item.
+- Diversity is useful, but steady progress through backlog is more important.
+- Update the state file with the selected lens, target article, and whether the run advanced, deferred, or skipped that target.
 
 ### Default behavior when selection is imperfect
 
@@ -194,7 +224,7 @@ If history is missing, incomplete, or ambiguous:
 - continue immediately with analysis.
 
 Perfect diversity management is secondary.
-Creating the issue with a strong board review is primary.
+Steady backlog progress is primary.
 
 ### 0.3 Inspect Open Tracking Work
 
@@ -213,6 +243,18 @@ If an open issue or PR already covers the same recommendation, do not duplicate 
 
 Do not include already-tracked recommendations in the final issue action list or PR candidate list.
 Only carry forward suggestions that are materially new and untracked.
+
+### 0.4 Build the Working Set
+
+Before deep analysis, build a small working set for this run:
+
+1. one primary target article from memory or current repo evidence,
+2. one fallback article if the first target is blocked,
+3. one likely PR pattern for the primary target,
+4. one backlog anchor issue if an open issue already tracks the broader theme.
+
+This workflow should feel like a persistent maintainer assistant.
+It should continue where it left off whenever possible, not behave like a fresh brainstorm every day.
 
 ## Phase 1: Conduct Analysis
 
@@ -487,6 +529,9 @@ Apply duplicate detection at the recommendation level, not only at the whole-run
 If 2 of 5 recommendations are already tracked, suppress those 2 and keep only the remaining new recommendations.
 If all meaningful recommendations are already tracked, emit `noop` instead of creating a duplicate issue or PR.
 
+Treat open PRs as blockers for duplicate implementation.
+Treat open issues as backlog anchors, not blockers, unless they already make a new issue unnecessary.
+
 ## Phase 3: Issue Body Format
 
 The GitHub issue body must contain exactly three sections and nothing else.
@@ -636,20 +681,21 @@ So the final GitHub issue title will appear as:
 
 ## Phase 4: Create the GitHub Issue
 
-After completing the analysis, create exactly one GitHub issue only when the board's recommendation set is not already tracked by an open issue or open PR.
+After completing the analysis and evaluating the best PR candidate, create exactly one GitHub issue only when materially new backlog remains that is not already tracked by an open issue or open PR.
 
 Before creating the issue, remove any recommendation that is already tracked by an open issue or open PR.
-The issue must contain only materially new, untracked recommendations.
+Also remove any recommendation already implemented by the focused PR created in this run.
+The issue must contain only materially new, untracked recommendations that still remain after any PR work.
 
 Do not stop after writing the report in the agent output.
 Do not only summarize findings in prose.
 Do not ask whether an issue should be created.
 
-Use the `create_issue` safe output exactly once.
+Use the `create_issue` safe output exactly once when backlog remains.
 
-The `create_issue` call is the primary deliverable.
+The `create_issue` call is the backlog-tracking deliverable.
 The board-style analysis must be inside `create_issue.body`.
-If you only write plain text without creating the issue, the task has failed.
+If you only write plain text without creating the required safe outputs, the task has failed.
 
 Never choose `noop` if repository analysis found a materially new, untracked improvement.
 Never choose `missing_tool` if `create_issue` or `create_pull_request` is available.
@@ -661,7 +707,7 @@ Use fallback outputs only in these narrow cases:
 - `missing_data`: the repository cannot be meaningfully analyzed because essential inputs are unavailable.
 - `noop`: the repository is empty, inaccessible, or the relevant improvement is already tracked by an open issue or PR and there is nothing materially new to add.
 
-In a normal successful run for this repository, the correct outcome is `create_issue`, optionally followed by `create_pull_request` when appropriate.
+In a normal successful run for this repository, the correct outcome is `create_pull_request` when a safe article edit exists, plus `create_issue` only when additional materially new backlog still needs tracking.
 
 ### Issue requirements
 
@@ -679,7 +725,8 @@ Principal Engineer Board Review — [FOCUS AREA]
 - The body must read like a published analysis issue, not like scratch notes or internal chain-of-thought.
 - The recommendations section must exclude suggestions already tracked elsewhere in open issues or open PRs.
 
-If you detect an existing open issue that already tracks the same improvement, do not create a duplicate issue.
+If you detect an existing open issue that already tracks the same backlog theme, do not create a duplicate issue.
+Instead, prefer implementing one focused untracked article improvement as a PR against that existing backlog.
 
 ### Deterministic execution pattern
 
@@ -687,19 +734,21 @@ Follow this order strictly:
 
 1. gather repository evidence,
 2. inspect open issues and open PRs for duplicates,
-3. filter out already-tracked recommendations and keep only new ones,
-4. select the review lens,
-5. draft the full 3-part board report using only new recommendations,
-6. if at least one materially new recommendation remains, call `create_issue` with:
+3. select the review lens,
+4. classify findings into `PR-eligible now`, `issue-only`, or `blocked by scope/runtime`,
+5. choose exactly one best PR candidate in `docs/_posts/**` with a target file, concrete edit scope, duplicate-check result, and explicit branch name,
+6. if that PR candidate is new and safe, edit the target files and call `create_pull_request`,
+7. filter out already-tracked recommendations and any recommendation already implemented by that PR,
+8. draft the full 3-part board report using only the remaining materially new backlog,
+9. if materially new backlog remains, call `create_issue` with:
    - `title`: `Principal Engineer Board Review — [FOCUS AREA]`
    - `body`: the complete 3-part report,
-7. if a focused, low-risk content improvement is justified and not already in progress, optionally create at most one PR after editing the target files and preparing a dedicated branch,
-8. if no materially new recommendation remains after deduplication, emit `noop`,
-9. update cache memory.
+10. if no materially new PR candidate and no materially new backlog remain after deduplication, emit `noop`,
+11. update cache memory.
 
-Do not substitute a narrative summary for step 4.
+Do not substitute a narrative summary for step 8.
 Do not emit the report outside the issue body.
-Do not stop after step 3.
+Do not stop after issue creation if a safe PR candidate exists.
 
 ## Phase 4.1: Optional Content-Improvement PR
 
@@ -710,7 +759,7 @@ Only create a PR when all of the following are true:
 - the benefit is clear from the board analysis,
 - the target is limited to technical content,
 - no equivalent open PR already exists,
-- no equivalent open issue or PR already tracks that exact change as a recommendation already assigned or in progress,
+- no equivalent open PR already tracks that exact change as already in progress,
 - the change does **not** require workflow, configuration, or code changes.
 
 Allowed edit scope for PRs:
@@ -725,6 +774,35 @@ Forbidden PR scope:
 
 If the best improvement would require forbidden scope, keep it in the issue only.
 
+### Required candidate selection before PR decision
+
+Before deciding issue-only, you must evaluate the strongest available PR candidate and record internally:
+
+- target file under `docs/_posts/**`,
+- exact section, heading, or line range to edit,
+- specific missing caveat, clarification, implementation note, or resilience note,
+- whether an open PR already implements that exact change,
+- whether an existing open issue can act as the backlog anchor,
+- explicit branch name to use if the edit is made.
+
+If you cannot fill in all of those fields for any candidate, then issue-only is acceptable.
+If you can fill them in for at least one candidate, do not stop at issue-only.
+
+### Preferred first-choice PR patterns for this repository
+
+When several PR candidates are available, prefer this order:
+
+1. add a missing caveat, failure mode, or resilience note to a single existing post,
+2. add a short implementation or migration checklist to a single existing post,
+3. add a short observability/debugging section to a single existing post,
+4. only then consider broader editorial backlog in the issue.
+
+Good candidate shapes in this repository include:
+- tightening replay, idempotency, or cutover caveats in `docs/_posts/2025-09-16-consumers-producers-migrations-strategies.md`,
+- adding migration-path or hot-partition caveats in `docs/_posts/2024-09-16-merging-message-types-in-a-kafka-topic.md`,
+- adding implementation scaffolding or WAL-decoding notes in `docs/_posts/2022-06-17-solving-dual-writes-with-cdc-and-the-outbox-pattern.md`,
+- adding missing delivery/failure caveats in `docs/_posts/2022-06-16-partial-execution-at-most-once-vs-at-least_once-deliveries.md`.
+
 ### PR requirements
 
 - Create **at most one PR per run**.
@@ -734,13 +812,14 @@ If the best improvement would require forbidden scope, keep it in the issue only
 - Only create a PR if you have actually edited repository files in the allowed scope.
 - Always pass an explicit `branch` value to `create_pull_request`.
 - Use a clean descriptive branch name such as `quality-improvement/[focus-area-slug]` or `quality-improvement/[target-article-slug]`.
+- Prefer one sentence, paragraph, section, or checklist improvement in a single post over broad multi-file editorial restructuring.
 - The PR title should describe the content improvement clearly.
 - The PR body should explain:
   - what was improved,
   - which board recommendation it implements,
   - what files were changed,
   - what still requires human editorial judgment.
-- Do not create a PR for a suggestion that is already tracked by an open issue or open PR.
+- Do not create a PR for a suggestion that is already being implemented by an open PR.
 
 ### Required `create_pull_request` shape
 
@@ -760,8 +839,9 @@ If you do not have a concrete branch name or did not make file edits, do not emi
 
 - If an existing open issue already tracks the improvement, explicitly reference that issue in the PR body.
 - If there is already an open PR implementing the same improvement, do not create another PR.
-- If a brand-new issue was created in this same run but you cannot deterministically reference it in the PR body, prefer issue-only output for this run rather than creating an ambiguously linked PR.
 - If the improvement is already tracked anywhere open, skip that PR candidate and evaluate the next best untracked candidate instead.
+- If no existing issue fits and a new issue is also created in this run, you may reference the board-review title, focus area, and workflow run context in the PR body instead of suppressing the PR.
+- Do not suppress a valid PR merely because same-run issue-number linking is imperfect.
 
 ### Final execution rule
 
@@ -770,12 +850,13 @@ Your task is only complete when:
 1. the analysis has been performed,
 2. duplicate detection has been performed against open issues and PRs,
 3. already-tracked suggestions have been removed from the final recommendations and PR candidates,
-4. the correct safe outputs have been emitted for this run,
-5. any optional PR respects the content-only and human-review-only rules.
+4. one focused PR has been created when a safe untracked post-level candidate exists,
+5. the correct safe outputs have been emitted for this run,
+6. any optional PR respects the content-only and human-review-only rules.
 
 ## Phase 5: Cache Memory Update
 
-After generating the report, update the focus area history:
+After generating the report, update the persistent backlog state:
 
 ```bash
 mkdir -p /tmp/gh-aw/cache-memory/focus-areas/
@@ -786,34 +867,48 @@ The JSON should include:
 - all previous runs,
 - the new run: `date`, `focus_area`, `custom`, `description`, `tasks_generated`, `strongest_objections`,
 - a `tracked_items` section recording known issue/PR fingerprints, targets, and states when available,
+- an `article_backlog` section recording each post's latest known status, suggestions tried, and most recent issue/PR linkage,
+- a `backlog_cursor` section recording which article or task family should be considered next,
 - updated `recent_areas` (last 5),
 - updated statistics (`total_runs`, `custom_rate`, `reuse_rate`, `unique_areas_explored`).
+
+At minimum, record:
+- which article was the primary target this run,
+- whether a PR was attempted, created, skipped, or blocked,
+- why the top PR candidate was skipped when no PR was created,
+- which remaining backlog items are still open and unimplemented,
+- which open issue is acting as the backlog anchor for those remaining items.
+
+The next run should be able to resume from this state without rediscovering the same recommendations from scratch.
 
 ## Success Criteria
 
 A successful run:
-- ✅ selects a review lens using the diversity algorithm,
+- ✅ selects a review lens that helps advance the current backlog target,
 - ✅ recognizes this repo is primarily a technical blog, not a large application codebase,
 - ✅ grounds analysis in real repository artifacts,
 - ✅ simulates the board using the named personas above,
 - ✅ includes realistic disagreement and probing questions,
 - ✅ does not duplicate already tracked issues or PRs,
-- ✅ produces the correct issue outcome when a new tracking issue is needed,
-- ✅ optionally creates at most one focused PR when justified,
+- ✅ prefers one focused `docs/_posts/**` PR when a safe untracked candidate exists,
+- ✅ produces the correct issue outcome only for materially new backlog that still needs tracking,
 - ✅ uses `create_issue` and `create_pull_request` safe outputs rather than only printing the report,
 - ✅ outputs exactly the three required sections,
 - ✅ generates 3–5 concrete action items,
-- ✅ updates cache memory with run history.
+- ✅ updates cache memory with run history and backlog progression state.
 
 ## Important Guidelines
 
 - **Be brutally honest**: no sugar-coating, no hype, no generic encouragement.
 - **Stay evidence-based**: if you cannot support a claim from repo evidence, do not make it.
 - **Prefer repository-specific lenses**: this repo is unusual because the product is thinking, writing, and technical explanation.
+- **Act like a persistent maintainer assistant**: continue from prior work instead of rediscovering the same ideas each run.
 - **Focus on principal-engineer concerns**: correctness, trade-offs, failure modes, maintainability, observability, security, and clarity.
 - **Do not over-index on code metrics** if the code footprint is small.
 - **Avoid duplicate work**: inspect open issues and PRs before creating new ones.
 - **Keep PRs surgical**: one focused content improvement at a time.
+- **Prefer implementation over backlog**: if one safe post-level fix can be shipped now, create the PR before falling back to issue-only.
+- **Prefer backlog progression over novelty**: revisiting the same article to finish a partially addressed improvement is better than inventing a new lens.
 - **PRs are human-reviewed only**: never merge automatically.
 - **Stay within allowed edit scope** for PRs.
 - **Name exact files, posts, workflows, or patterns** whenever possible.
