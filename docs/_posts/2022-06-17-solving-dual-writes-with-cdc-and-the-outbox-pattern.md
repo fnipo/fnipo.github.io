@@ -170,6 +170,46 @@ the publishing service should perform stream-table join operations when needed t
 The act of publishing a stream of internal events to the *data that live outside* is also called *Projection*, and in recent work, I used the [Propulsion][propulsion] library on .NET to implement a Projection.
 Propulsion provides sources that work from events/messages, i.e. ordered streams, providing the ability to replicate them into another store, with optional custom enrichment steps, and with an exactly-once delivery guarantee. It supports stores such as CosmosDB, DynamoDB, EventStoreDB and Kafka.
 
+# Infrastructure Prerequisites
+
+Before adopting CDC and the Outbox Pattern, ensure your infrastructure and observability maturity meet these baseline requirements:
+
+## Minimum Viable Observability
+
+CDC systems require production-grade observability to detect failures early. At a minimum:
+
+- **Database Transaction Log Access**: CDC relies on reading database transaction logs (Postgres WAL, MySQL binlog, SQL Server transaction log). Verify your database access policies permit log tailing by the replication service. Database user permissions must include log read privileges.
+- **Kafka or Message Queue Metrics**: Monitor broker health, partition rebalancing, and consumer lag. Basic broker metrics (e.g., `UnderReplicatedPartitions`, `OfflinePartitionsCount`) should be visible in your monitoring system.
+- **Consumer Lag Monitoring**: For Outbox Pattern consumers, track how far behind they are consuming captured changes. Tools like Burrow (LinkedIn), Confluent Control Center, or custom lag exporters are essential. Lag > 5 minutes is typically a signal to investigate.
+- **Message Producer / Replication Service Logs**: The CDC producer (Debezium, Postgres Logical Decoding client, etc.) must expose logs and basic metrics (processed records per second, errors, latency).
+
+**Why This Matters**: Without these signals, you won't detect when CDC falls behind, when replication failures occur, or when messages are lost. Teams deploying CDC without observability often discover failures only when downstream services halt.
+
+## Optional But Recommended
+
+- **Distributed Tracing** (e.g., Jaeger, Datadog, Honeycomb): Tracing CDC flows end-to-end (database change → message produced → message consumed) accelerates debugging when messages are unexpectedly delayed or missing. Not mandatory but highly recommended for production systems.
+- **Database Query Performance Monitoring**: Large transactions or long-running queries can block WAL reading in Postgres and impact CDC latency. Query monitoring (e.g., `pg_stat_statements` for Postgres) helps diagnose latency spikes.
+- **Dead Letter Queue (DLQ) Handling**: Define how failed message processing is handled. Without a DLQ, consumer crashes leave gaps in processing that are hard to recover from.
+
+## Common Implementation Gotchas
+
+1. **WAL Retention**: Postgres requires sufficient `wal_keep_size` to avoid gaps when CDC lags. Set conservatively (e.g., `wal_keep_size = 10GB` for safety) and monitor accordingly.
+2. **Replication Slot Conflicts**: Multiple CDC consumers on the same Postgres replication slot can interfere. Use distinct slots per consumer group.
+3. **Message Ordering Per Shard**: If your Outbox table is sharded across multiple databases, CDC must preserve per-shard ordering. Messages from different shards may be delivered out of global order.
+4. **Exactly-Once Delivery**: The Outbox Pattern guarantees message production is atomic with database writes, but message consumption remains "at-least-once." Consumers must be idempotent or track message IDs to avoid duplicate processing.
+
+## Readiness Checklist
+
+- [ ] Database transaction log access verified; replication user permissions confirmed
+- [ ] Kafka/message broker monitoring in place
+- [ ] Consumer lag monitoring active and alerting configured
+- [ ] Log aggregation captures CDC producer and consumer errors
+- [ ] Team understands WAL/binlog retention implications
+- [ ] Runbook exists for "CDC fell behind" scenarios
+- [ ] Downstream consumer systems can handle duplicate message processing
+
+If any of these are missing, CDC deployment risk is high. Start with the monitoring foundation before running CDC in production.
+
 [two-phase-commit]: https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html
 [partial-execution-article]: ../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html
 [aws-slas]: https://aws.amazon.com/legal/service-level-agreements/
