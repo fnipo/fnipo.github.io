@@ -174,7 +174,7 @@ Propulsion provides sources that work from events/messages, i.e. ordered streams
 [partial-execution-article]: ../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html
 [aws-slas]: https://aws.amazon.com/legal/service-level-agreements/
 [cassandra-cdc]: https://cassandra.apache.org/doc/latest/cassandra/operating/cdc.html
-[cosmos-cdc]: https://docs.microsoft.com/en-us/azure/cosmos-db/sql/change-feed-processor
+[cosmos-cdc]: https://learn.microsoft.com/en-us/azure/cosmos-db/change-feed-processor
 [article-part-1-rollback]: ../../../2022/06/16/partial-execution-at-most-once-vs-at-least_once-deliveries.html#at-least-once-delivery
 [transaction-log-tailling]: https://microservices.io/patterns/data/transaction-log-tailing.html
 [domain-driven-distilled-book]: https://www.goodreads.com/en/book/show/28602719-domain-driven-design-distilled
