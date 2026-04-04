@@ -151,9 +151,74 @@ This model allows a service to produce the same message *N* times, as it retries
 
 Services consuming the *OrderCreated* message may assume multiple Orders were created.
 
-This model requires that messages are designed to be uniquely identified, e.g. by an *OrderId* field, and requires an effort across the system to ensure this identifier is used for deduplication and idempotency
+This model requires that messages are designed to be uniquely identified, e.g. by an *OrderId* field, and requires an effort across the system to ensure this identifier is used for deduplication and idempotency.
 
-This is easy though because services should be idempotent anyway to be resilient to situations that may cause messages to be consumed more than once even though it was produced only once, such as when processing in batches or consumer offset skews.
+**Implementing Idempotency is Non-Trivial**
+
+While idempotency is necessary for resilience, implementing it correctly across multiple services is not "easy"—it trades obvious failure modes for subtle distributed-systems challenges:
+
+**Idempotency Key Selection**
+
+You must choose an identifier that uniquely represents a single logical operation. For an Order, this might be *OrderId*, but consider:
+- **Clock skew and timing**: If a client retries and the server generates a new OrderId each time, the deduplication won't work. The client must provide the OrderId.
+- **Idempotency key scope**: Is the key unique globally, per customer, or per time window? An *OrderId* is global; a correlation ID within an Order domain may collide.
+- **Partial failures**: If a consumer processes an order, commits a side effect (e.g., payment charge), but crashes before acknowledging the message, the next consumer must detect this and not re-charge. The idempotency key must cover both processing and acknowledgment.
+
+**Deduplication Detection & Storage**
+
+Once you've chosen the key, you must detect duplicates. This requires tracking which keys you've seen:
+- **In-memory cache**: Fast but lost on restart; unsafe for critical operations. Only viable if you have a durable backing store you can re-query on recovery.
+- **Database write-through**: Store a `ProcessedOrderId` record before applying side effects. On retry, check if the record exists. Cost: an extra database round-trip per message.
+- **Message broker offset ranges**: Track the offset range per key (e.g., "OrderId 123 was processed at offsets 5000-5010"). Requires tracking state, monitoring rebalances, and ensuring offset ranges don't overlap. Complex.
+- **TTL and cleanup**: Deduplication records must be cleaned up eventually. Store them with a TTL (7 days? 30 days?) to avoid unbounded growth.
+
+**Clock Skew and Ordering**
+
+In distributed systems, clocks are not synchronized. If Consumer A processes *OrderCreated* with timestamp T1, and Consumer B later receives a duplicate with timestamp T2 > T1 (due to clock skew), B might assume it's a new message and process it twice:
+- Use logical timestamps (e.g., Kafka offsets) instead of wall-clock time for ordering decisions.
+- Or use idempotency keys that are immutable (OrderId won't change), not timestamps.
+
+**Example: Payment Service Deduplication**
+
+A payment service receives *PaymentRequested* messages:
+
+```
+Message: {"payment_id": "PAY-9999", "order_id": "ORD-123", "amount": 100, "currency": "USD"}
+```
+
+On first consumption:
+1. Check database: `SELECT * FROM processed_payments WHERE payment_id = 'PAY-9999'`
+2. If not found, process the payment (charge the customer)
+3. Insert: `INSERT INTO processed_payments (payment_id, order_id, amount, processed_at) VALUES (...)`
+4. Commit the message offset
+
+If the consumer crashes after charging but before the offset commit, the message reappears:
+1. Check database: `SELECT * FROM processed_payments WHERE payment_id = 'PAY-9999'` → Found!
+2. Skip processing; use the stored result
+3. Commit the offset
+
+This works, but requires:
+- A durable record store (database)
+- Careful transaction boundaries (insert must happen atomically with business logic)
+- Cleanup of old records (monthly purge of 90-day-old processed_payments)
+- Monitoring for duplicate processing anyway (alerting if the same payment_id is re-processed, suggesting a bug in the deduplication logic)
+
+**The Coordination Challenge Across Multiple Services**
+
+Idempotency is not just a single-service concern. Multiple services consuming the same message must agree on the idempotency key:
+- If Service A uses `OrderId` and Service B uses `(OrderId, timestamp)`, they will disagree on whether a retried message is a duplicate.
+- If one service forgets to deduplicate, the system is not idempotent overall.
+- Deduplication logic must be consistent across deployments; a code bug that strips the idempotency key from one version will cause duplicates.
+
+**Resilience is Necessary But Not Sufficient**
+
+Yes, services should be idempotent for resilience. But implementing idempotency is an operational burden that scales with the number of consumers and the variety of operations. Each consumer must invest in:
+- Choosing the right idempotency key for its domain
+- Storing and cleaning up deduplication records
+- Monitoring for double-processing bugs
+- Testing retry scenarios under load
+
+This is why systems with at-least-once delivery often shift this burden to frameworks, libraries, or external systems (e.g., a centralized deduplication service) rather than leaving it to each service.
 
 ##### Race conditions
 
