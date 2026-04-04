@@ -75,7 +75,7 @@ It's particularly risky with public artifacts. Don't be surprised to find out th
 # A Real-World Incident
 I recently discovered a critical incident affecting Azure Cosmos DB users based on Docker, which began following a Patch release.
 
->[https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302](https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302).
+>[https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302](https://github.com/Azure/azure-cosmos-dotnet-v3/issues/5302)
 
 Here is what happened:
 - In July 2025, Azure Cosmos DB users running on Docker began experiencing intermittent connection failures after the `.NET 8.0.18` Patch release, which triggered an update on the corresponding `aspnet:8.0-alpine` Docker image to support the new .NET runtime version.
